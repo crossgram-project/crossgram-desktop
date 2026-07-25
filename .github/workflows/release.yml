@@ -61,7 +61,7 @@ jobs:
             vsversion: "18.0"
     steps:
       - name: Check out patcher
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: patcher
 
@@ -94,7 +94,7 @@ jobs:
 
       - name: Check out upstream
         if: steps.exists.outputs.value != 'true' || inputs.force
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ matrix.build.repository }}
           ref: ${{ steps.release.outputs.tag }}
@@ -104,7 +104,7 @@ jobs:
 
       - name: Set up Node.js
         if: steps.exists.outputs.value != 'true' || inputs.force
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -154,7 +154,8 @@ jobs:
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           cd /d %GITHUB_WORKSPACE%\work\TBuild\source\Telegram
-          call build\prepare\win.bat skip-release silent qt6
+          call build\prepare\win.bat silent qt6
+          if errorlevel 1 exit /b %errorlevel%
           set EFFECTIVE_API_ID=%DEFAULT_API_ID%
           set EFFECTIVE_API_HASH=%DEFAULT_API_HASH%
           if not "%OVERRIDE_API_ID%%OVERRIDE_API_HASH%"=="" if "%OVERRIDE_API_ID%"=="" exit /b 1
@@ -162,6 +163,7 @@ jobs:
           if not "%OVERRIDE_API_ID%"=="" set EFFECTIVE_API_ID=%OVERRIDE_API_ID%
           if not "%OVERRIDE_API_HASH%"=="" set EFFECTIVE_API_HASH=%OVERRIDE_API_HASH%
           call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%EFFECTIVE_API_ID% -D TDESKTOP_API_HASH=%EFFECTIVE_API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
+          if errorlevel 1 exit /b %errorlevel%
           cmake --build ..\out --config Release --parallel
 
       - name: Package Windows

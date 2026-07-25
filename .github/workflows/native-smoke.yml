@@ -16,7 +16,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out patcher
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: patcher
 
@@ -28,7 +28,7 @@ jobs:
         run: echo "tag=$(gh api repos/telegramdesktop/tdesktop/releases/latest --jq .tag_name)" >> "$GITHUB_OUTPUT"
 
       - name: Check out upstream
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: telegramdesktop/tdesktop
           ref: ${{ steps.release.outputs.tag }}
@@ -37,7 +37,7 @@ jobs:
           path: work/TBuild/source
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -70,5 +70,7 @@ jobs:
         run: |
           cd /d %GITHUB_WORKSPACE%\work\TBuild\source\Telegram
           call build\prepare\win.bat skip-release silent qt6
-          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%API_ID% -D TDESKTOP_API_HASH=%API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
-          cmake --build ..\out --config Release --target Telegram --parallel
+          if errorlevel 1 exit /b %errorlevel%
+          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%API_ID% -D TDESKTOP_API_HASH=%API_HASH% -D CMAKE_CONFIGURATION_TYPES=Debug -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build ..\out --config Debug --target Telegram --parallel

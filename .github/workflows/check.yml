@@ -48,7 +48,7 @@ jobs:
             repository: telegramdesktop/tdesktop
     steps:
       - name: Check out patcher
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: patcher
 
@@ -62,7 +62,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Check out upstream
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ matrix.build.repository }}
           ref: ${{ steps.release.outputs.tag }}
@@ -70,7 +70,7 @@ jobs:
           path: source
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
