@@ -26,30 +26,39 @@ jobs:
           - target: tdesktop
             brand: cross
             repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
           - target: tdesktop-x64
             brand: cross
             repository: TDesktop-x64/tdesktop
+            vsversion: "18.0"
           - target: ayugram
             brand: cross
             repository: AyuGram/AyuGramDesktop
+            vsversion: "17.0"
           - target: materialgram
             brand: cross
             repository: kukuruzka165/materialgram
+            vsversion: "17.0"
           - target: tdesktop
             brand: qq
             repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
           - target: tdesktop
             brand: wechat
             repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
           - target: tdesktop
             brand: wecom
             repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
           - target: tdesktop
             brand: dingtalk
             repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
           - target: tdesktop
             brand: discord
             repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
     steps:
       - name: Check out patcher
         uses: actions/checkout@v4
@@ -131,6 +140,9 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+          sdk: 10.0.26100.0
+          toolset: "14.44"
+          vsversion: ${{ matrix.build.vsversion }}
 
       - name: Prepare and build Windows
         if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
