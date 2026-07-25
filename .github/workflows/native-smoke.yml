@@ -1,0 +1,68 @@
+name: Native smoke build
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-smoke-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: tdesktop / Windows smoke
+    runs-on: windows-latest
+    steps:
+      - name: Check out patcher
+        uses: actions/checkout@v4
+        with:
+          path: patcher
+
+      - name: Resolve latest release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "tag=$(gh api repos/telegramdesktop/tdesktop/releases/latest --jq .tag_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out upstream
+        uses: actions/checkout@v4
+        with:
+          repository: telegramdesktop/tdesktop
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 1
+          submodules: recursive
+          path: work/TBuild/source
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: patcher/yarn.lock
+
+      - name: Apply server switch
+        shell: bash
+        working-directory: patcher
+        run: |
+          yarn install --immutable
+          yarn apply --target tdesktop --root "$GITHUB_WORKSPACE/work/TBuild/source"
+          git -C "$GITHUB_WORKSPACE/work/TBuild/source" diff --check
+
+      - name: Initialize MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Prepare and compile
+        shell: cmd
+        run: |
+          cd /d %GITHUB_WORKSPACE%\work\TBuild\source\Telegram
+          call build\prepare\win.bat skip-release silent qt6
+          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_TEST=ON -D CMAKE_CONFIGURATION_TYPES=Release -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
+          cmake --build ..\out --config Release --target Telegram --parallel
