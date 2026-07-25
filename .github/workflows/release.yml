@@ -78,6 +78,10 @@ jobs:
           submodules: recursive
           path: work/TBuild/source
 
+      - name: Enable Corepack
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        run: corepack enable
+
       - name: Set up Node.js
         if: steps.exists.outputs.value != 'true' || inputs.force
         uses: actions/setup-node@v4
