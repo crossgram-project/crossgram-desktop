@@ -42,6 +42,14 @@ describe("TextFile", () => {
     expect(result).toBe("first\r\nanchor\r\nadded\r\nlast\r\n");
   });
 
+  it("can normalize generated resource files to LF", async () => {
+    const path = await fixture("first\r\nsecond\r\n");
+    const file = await TextFile.open(path);
+    file.normalizeLf();
+    await file.save();
+    expect(await readFile(path, "utf8")).toBe("first\nsecond\n");
+  });
+
   it("rejects ambiguous anchors", async () => {
     const path = await fixture("anchor\nanchor\n");
     const file = await TextFile.open(path);

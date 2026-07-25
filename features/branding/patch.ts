@@ -104,6 +104,7 @@ export async function patchBranding(options: PatchOptions): Promise<void> {
       file.replace("#pragma code_page(1252)", "#pragma code_page(65001)");
       file.replacePattern(/^\s*VALUE "FileDescription", "[^"]*"$/m, `            VALUE "FileDescription", "${brand.title}${resource === "Updater.rc" ? " Updater" : ""}"`);
       file.replacePattern(/^\s*VALUE "ProductName", "[^"]*"$/m, `            VALUE "ProductName", "${brand.title}"`);
+      file.normalizeLf();
     });
   }
 

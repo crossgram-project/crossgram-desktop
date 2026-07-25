@@ -77,6 +77,10 @@ export class TextFile {
     return this.source.includes(this.format(marker));
   }
 
+  normalizeLf(): void {
+    this.source = this.source.replaceAll("\r\n", "\n");
+  }
+
   insertAfter(anchor: string, addition: string, marker = addition.trim()): void {
     if (this.has(marker)) return;
     const formattedAnchor = this.format(anchor);
