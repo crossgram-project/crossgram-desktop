@@ -78,17 +78,15 @@ jobs:
           submodules: recursive
           path: work/TBuild/source
 
-      - name: Enable Corepack
-        if: steps.exists.outputs.value != 'true' || inputs.force
-        run: corepack enable
-
       - name: Set up Node.js
         if: steps.exists.outputs.value != 'true' || inputs.force
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: yarn
-          cache-dependency-path: patcher/yarn.lock
+
+      - name: Enable Corepack
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        run: corepack enable
 
       - name: Apply server switch
         if: steps.exists.outputs.value != 'true' || inputs.force

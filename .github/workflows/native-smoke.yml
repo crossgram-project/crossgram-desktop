@@ -36,15 +36,13 @@ jobs:
           submodules: recursive
           path: work/TBuild/source
 
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: yarn
-          cache-dependency-path: patcher/yarn.lock
+
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Apply server switch
         shell: bash
