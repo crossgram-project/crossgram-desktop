@@ -27,10 +27,18 @@ describe("targets", () => {
       readFile(resolve(repositoryRoot, ".github/workflows/check.yml"), "utf8"),
       readFile(resolve(repositoryRoot, ".github/workflows/release.yml"), "utf8"),
     ]);
-    const ids = targets.map(({ id }) => id);
-    const matrixIds = (workflow: string) =>
-      [...workflow.matchAll(/^\s+- id: (\S+)$/gm)].map((match) => match[1]);
-    expect(matrixIds(check)).toEqual(ids);
-    expect(matrixIds(release)).toEqual([...ids, ...ids]);
+    const expected = [
+      ...targets.map(({ id }) => `${id}/cross`),
+      "tdesktop/qq",
+      "tdesktop/wechat",
+      "tdesktop/wecom",
+      "tdesktop/dingtalk",
+      "tdesktop/discord",
+    ];
+    const matrixBuilds = (workflow: string) =>
+      [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brand: (\S+)$/gm)]
+        .map((match) => `${match[1]}/${match[2]}`);
+    expect(matrixBuilds(check)).toEqual(expected);
+    expect(matrixBuilds(release)).toEqual([...expected, ...expected]);
   });
 });

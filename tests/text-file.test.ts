@@ -47,4 +47,21 @@ describe("TextFile", () => {
     const file = await TextFile.open(path);
     expect(() => file.insertAfter("anchor", "\nadded")).toThrow(/ambiguous/);
   });
+
+  it("replaces one semantic line with a regular expression", async () => {
+    const path = await fixture('constexpr auto AppName = "Old"_cs;\n');
+    const file = await TextFile.open(path);
+    file.replacePattern(
+      /^constexpr auto AppName = "[^"]*"_cs;$/m,
+      'constexpr auto AppName = "New"_cs;',
+    );
+    await file.save();
+    expect(await readFile(path, "utf8")).toBe('constexpr auto AppName = "New"_cs;\n');
+  });
+
+  it("rejects an ambiguous regular expression", async () => {
+    const path = await fixture("Name=One\nName=Two\n");
+    const file = await TextFile.open(path);
+    expect(() => file.replacePattern(/^Name=.*$/m, "Name=Cross")).toThrow(/ambiguous/);
+  });
 });

@@ -101,6 +101,32 @@ export class TextFile {
       this.source.slice(index + formattedSearch.length);
   }
 
+  replaceEvery(search: string, replacement: string, appliedMarker = replacement): void {
+    if (this.has(appliedMarker)) return;
+    const formattedSearch = this.format(search);
+    if (!this.source.includes(formattedSearch)) {
+      throw new PatchError(`Could not find text '${search}'.`);
+    }
+    this.source = this.source.replaceAll(formattedSearch, this.format(replacement));
+  }
+
+  replacePattern(search: RegExp, replacement: string, appliedMarker = replacement.trim()): void {
+    if (this.has(appliedMarker)) return;
+    const globalFlags = search.flags.includes("g") ? search.flags : `${search.flags}g`;
+    const matches = [...this.source.matchAll(new RegExp(search.source, globalFlags))];
+    if (matches.length === 0) {
+      throw new PatchError(`Could not find pattern '${search.source}'.`);
+    }
+    if (matches.length > 1) {
+      throw new PatchError(`Pattern '${search.source}' is ambiguous.`);
+    }
+    const singleFlags = search.flags.replaceAll("g", "").replaceAll("y", "");
+    this.source = this.source.replace(
+      new RegExp(search.source, singleFlags),
+      this.format(replacement),
+    );
+  }
+
   insertAfterFunction(signature: string, addition: string, marker = addition.trim()): void {
     if (this.has(marker)) return;
     const start = findUnique(this.source, signature, `function '${signature}'`);

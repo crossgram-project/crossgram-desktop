@@ -1,6 +1,6 @@
 # Crossgram Desktop patcher
 
-This repository applies opt-in features to Telegram Desktop forks without using Git patch files. The first feature, `server-switch`, adds a per-account MTProto server selector to the sign-in UI.
+This repository applies opt-in features to Telegram Desktop forks without using Git patch files. `server-switch` adds a per-account MTProto server selector to the sign-in UI, while `branding` gives generated applications independent names and platform identifiers.
 
 Supported upstreams:
 
@@ -18,12 +18,26 @@ Node.js 22 or newer and Yarn 4 are required.
 ```bash
 corepack enable
 yarn install --immutable
-yarn apply --target tdesktop --root /path/to/tdesktop
+yarn apply --target tdesktop --brand cross --root /path/to/tdesktop
 ```
 
-Target ids are `tdesktop`, `tdesktop-x64`, `ayugram`, and `materialgram`. Applying the patch repeatedly is supported and produces no duplicate code.
+Target ids are `tdesktop`, `tdesktop-x64`, `ayugram`, and `materialgram`. Brand ids are `cross`, `qq`, `wechat`, `wecom`, `dingtalk`, and `discord`; `cross` is the default. Applying the patch repeatedly is supported and produces byte-identical output.
 
-The patcher performs unique, structural edits around C++ function bodies, declarations, includes, and CMake source lists. A missing or ambiguous anchor is a hard failure. Large injected implementations live in [`features/server-switch`](features/server-switch), while [`patch.ts`](features/server-switch/patch.ts) contains the integration logic.
+The patcher performs unique, structural edits around C++ function bodies, declarations, includes, CMake metadata, and desktop integration files. A missing or ambiguous anchor is a hard failure. Large injected implementations and their integration logic are isolated under [`features/server-switch`](features/server-switch) and [`features/branding`](features/branding).
+
+## Build branding
+
+Default builds use `CrossTelegram`, `Cross64Gram`, `CrossAyuGram`, or `CrossMaterialgram` and append `.crossgram` to the upstream platform identifier. The additional Telegram Desktop themes are:
+
+- `QQ · Cross` / `.crossgram.qq`
+- `微信 · Cross` / `.crossgram.wechat`
+- `企业微信 · Cross` / `.crossgram.wecom`
+- `钉钉 · Cross` / `.crossgram.dingtalk`
+- `Discord · Cross` / `.crossgram.discord`
+
+Windows receives a distinct deterministic AppId, macOS a distinct bundle id, and Linux a distinct desktop/application id. Display names may contain Unicode; executable filenames remain ASCII. The themed icons are current App Store CDN artwork with source URLs and SHA-256 hashes recorded in [`features/branding/assets/SOURCES.md`](features/branding/assets/SOURCES.md).
+
+These are unofficial themed builds and are not affiliated with or endorsed by Tencent, Alibaba, Discord, Telegram, or the upstream client projects.
 
 ## User experience
 
@@ -64,16 +78,16 @@ tdata/<account-hash>/server-switch.json
 
 ## CI and releases
 
-[`check.yml`](.github/workflows/check.yml) resolves and patches all four latest upstream releases in parallel. Matrix fail-fast is disabled, so a broken upstream does not cancel the others.
+[`check.yml`](.github/workflows/check.yml) resolves and patches all four latest upstream releases plus the five Telegram Desktop themes in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
 
-[`release.yml`](.github/workflows/release.yml) builds a 4-client × 3-platform matrix for Windows, Linux, and macOS. Successful artifacts are grouped and published per client; one client's failure does not block the other release jobs. A platform asset that already exists is skipped, while a previously failed or missing platform is retried on the next run. A manual run can set `force` to rebuild every asset.
+[`release.yml`](.github/workflows/release.yml) builds 9 target/brand combinations × 3 platforms for Windows, Linux, and macOS. Successful artifacts are grouped and published per target/brand; one job's failure does not block the other releases. A platform asset that already exists is skipped, while a previously failed or missing platform is retried on the next run. A manual run can set `force` to rebuild every asset.
 
-For production Telegram access, define repository secrets `TDESKTOP_API_ID` and `TDESKTOP_API_HASH`. Without them, CI passes `TDESKTOP_API_TEST=ON`; those artifacts are useful for build validation but do not contain production API credentials.
+CI defaults to the production API ID/hash recovered from each upstream's official release binary: Telegram Desktop and AyuGram use Telegram Desktop's credentials, while 64Gram and Materialgram keep their own. Repository secrets `TDESKTOP_API_ID` and `TDESKTOP_API_HASH` may override both values together. Release builds never fall back to `TDESKTOP_API_TEST=ON`.
 
 Release tags use this form:
 
 ```text
-crossgram/<target-id>/<upstream-release-tag>
+crossgram/<target-id>/<brand-id>/<upstream-release-tag>
 ```
 
 ## Development checks

@@ -44,12 +44,14 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - name: Apply server switch
+      - name: Read build metadata and apply features
+        id: metadata
         shell: bash
         working-directory: patcher
         run: |
           yarn install --immutable
-          yarn apply --target tdesktop --root "$GITHUB_WORKSPACE/work/TBuild/source"
+          yarn metadata --target tdesktop --brand qq --github-output
+          yarn apply --target tdesktop --brand qq --root "$GITHUB_WORKSPACE/work/TBuild/source"
           git -C "$GITHUB_WORKSPACE/work/TBuild/source" diff --check
 
       - name: Initialize MSVC
@@ -59,8 +61,11 @@ jobs:
 
       - name: Prepare and compile
         shell: cmd
+        env:
+          API_ID: ${{ steps.metadata.outputs.apiId }}
+          API_HASH: ${{ steps.metadata.outputs.apiHash }}
         run: |
           cd /d %GITHUB_WORKSPACE%\work\TBuild\source\Telegram
           call build\prepare\win.bat skip-release silent qt6
-          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_TEST=ON -D CMAKE_CONFIGURATION_TYPES=Release -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
+          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%API_ID% -D TDESKTOP_API_HASH=%API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
           cmake --build ..\out --config Release --target Telegram --parallel

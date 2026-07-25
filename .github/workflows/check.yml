@@ -13,20 +13,39 @@ permissions:
 
 jobs:
   patch:
-    name: Patch ${{ matrix.target.id }}
+    name: Patch ${{ matrix.build.target }} / ${{ matrix.build.brand }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - id: tdesktop
+        build:
+          - target: tdesktop
+            brand: cross
             repository: telegramdesktop/tdesktop
-          - id: tdesktop-x64
+          - target: tdesktop-x64
+            brand: cross
             repository: TDesktop-x64/tdesktop
-          - id: ayugram
+          - target: ayugram
+            brand: cross
             repository: AyuGram/AyuGramDesktop
-          - id: materialgram
+          - target: materialgram
+            brand: cross
             repository: kukuruzka165/materialgram
+          - target: tdesktop
+            brand: qq
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: wechat
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: wecom
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: dingtalk
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: discord
+            repository: telegramdesktop/tdesktop
     steps:
       - name: Check out patcher
         uses: actions/checkout@v4
@@ -37,7 +56,7 @@ jobs:
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          UPSTREAM: ${{ matrix.target.repository }}
+          UPSTREAM: ${{ matrix.build.repository }}
         run: |
           tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -45,7 +64,7 @@ jobs:
       - name: Check out upstream
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.target.repository }}
+          repository: ${{ matrix.build.repository }}
           ref: ${{ steps.release.outputs.tag }}
           fetch-depth: 1
           path: source
@@ -60,19 +79,18 @@ jobs:
 
       - name: Install patcher
         working-directory: patcher
-        run: |
-          corepack enable
-          yarn install --immutable
+        run: yarn install --immutable
 
       - name: Apply twice and verify
         working-directory: patcher
         env:
-          TARGET: ${{ matrix.target.id }}
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
         run: |
-          yarn apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source"
           git -C "$GITHUB_WORKSPACE/source" add --intent-to-add .
           git -C "$GITHUB_WORKSPACE/source" diff --check
           before="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
-          yarn apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source"
           after="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
           test "$before" = "$after"
