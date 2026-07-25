@@ -286,4 +286,3 @@ void FillMenu(
 }
 
 } // namespace Crossgram::ServerSwitch
-

@@ -93,13 +93,14 @@ jobs:
       - name: Apply server switch
         if: steps.exists.outputs.value != 'true' || inputs.force
         shell: bash
+        working-directory: patcher
         env:
           TARGET: ${{ matrix.target.id }}
         run: |
           corepack enable
-          yarn --cwd patcher install --immutable
-          yarn --cwd patcher apply --target "$TARGET" --root "$GITHUB_WORKSPACE/work/TBuild/source"
-          git -C work/TBuild/source diff --check
+          yarn install --immutable
+          yarn apply --target "$TARGET" --root "$GITHUB_WORKSPACE/work/TBuild/source"
+          git -C "$GITHUB_WORKSPACE/work/TBuild/source" diff --check
 
       - name: Initialize MSVC
         if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)

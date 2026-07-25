@@ -67,13 +67,14 @@ jobs:
           yarn install --immutable
 
       - name: Apply twice and verify
+        working-directory: patcher
         env:
           TARGET: ${{ matrix.target.id }}
         run: |
-          yarn --cwd patcher apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
-          git -C source add --intent-to-add .
-          git -C source diff --check
-          before="$(git -C source diff --binary --no-ext-diff HEAD | sha256sum)"
-          yarn --cwd patcher apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
-          after="$(git -C source diff --binary --no-ext-diff HEAD | sha256sum)"
+          yarn apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
+          git -C "$GITHUB_WORKSPACE/source" add --intent-to-add .
+          git -C "$GITHUB_WORKSPACE/source" diff --check
+          before="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
+          yarn apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
+          after="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
           test "$before" = "$after"
