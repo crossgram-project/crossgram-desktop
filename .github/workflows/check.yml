@@ -1,0 +1,76 @@
+name: Check upstream releases
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    name: Patch ${{ matrix.target.id }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - id: tdesktop
+            repository: telegramdesktop/tdesktop
+          - id: tdesktop-x64
+            repository: TDesktop-x64/tdesktop
+          - id: ayugram
+            repository: AyuGram/AyuGramDesktop
+          - id: materialgram
+            repository: kukuruzka165/materialgram
+    steps:
+      - name: Check out patcher
+        uses: actions/checkout@v4
+        with:
+          path: patcher
+
+      - name: Resolve latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM: ${{ matrix.target.repository }}
+        run: |
+          tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check out upstream
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.target.repository }}
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 1
+          path: source
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: patcher/yarn.lock
+
+      - name: Install patcher
+        working-directory: patcher
+        run: |
+          corepack enable
+          yarn install --immutable
+
+      - name: Apply twice and verify
+        env:
+          TARGET: ${{ matrix.target.id }}
+        run: |
+          yarn --cwd patcher apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
+          git -C source add --intent-to-add .
+          git -C source diff --check
+          before="$(git -C source diff --binary --no-ext-diff HEAD | sha256sum)"
+          yarn --cwd patcher apply --target "$TARGET" --root "$GITHUB_WORKSPACE/source"
+          after="$(git -C source diff --binary --no-ext-diff HEAD | sha256sum)"
+          test "$before" = "$after"

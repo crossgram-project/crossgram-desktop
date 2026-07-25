@@ -1,0 +1,36 @@
+import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { targetById, targets } from "../src/targets.js";
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+describe("targets", () => {
+  it("contains every supported upstream exactly once", () => {
+    expect(targets.map(({ id }) => id)).toEqual([
+      "tdesktop",
+      "tdesktop-x64",
+      "ayugram",
+      "materialgram",
+    ]);
+    const repositories = new Set(targets.map(({ repository }) => repository));
+    expect(repositories.size).toBe(targets.length);
+  });
+
+  it("rejects unknown target ids", () => {
+    expect(() => targetById("unknown")).toThrow(/Unknown target/);
+  });
+
+  it("keeps both workflow matrices in sync with the registry", async () => {
+    const [check, release] = await Promise.all([
+      readFile(resolve(repositoryRoot, ".github/workflows/check.yml"), "utf8"),
+      readFile(resolve(repositoryRoot, ".github/workflows/release.yml"), "utf8"),
+    ]);
+    const ids = targets.map(({ id }) => id);
+    const matrixIds = (workflow: string) =>
+      [...workflow.matchAll(/^\s+- id: (\S+)$/gm)].map((match) => match[1]);
+    expect(matrixIds(check)).toEqual(ids);
+    expect(matrixIds(release)).toEqual([...ids, ...ids]);
+  });
+});
