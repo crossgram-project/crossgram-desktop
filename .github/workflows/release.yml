@@ -178,7 +178,7 @@ jobs:
           if not "%OVERRIDE_API_ID%%OVERRIDE_API_HASH%"=="" if "%OVERRIDE_API_HASH%"=="" exit /b 1
           if not "%OVERRIDE_API_ID%"=="" set EFFECTIVE_API_ID=%OVERRIDE_API_ID%
           if not "%OVERRIDE_API_HASH%"=="" set EFFECTIVE_API_HASH=%OVERRIDE_API_HASH%
-          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%EFFECTIVE_API_ID% -D TDESKTOP_API_HASH=%EFFECTIVE_API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
+          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%EFFECTIVE_API_ID% -D TDESKTOP_API_HASH=%EFFECTIVE_API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
           if errorlevel 1 exit /b %errorlevel%
           cmake --build ..\out --config Release --parallel
 
@@ -192,8 +192,11 @@ jobs:
           VERSION: ${{ steps.release.outputs.safe }}
         run: |
           $output = Join-Path $env:GITHUB_WORKSPACE 'work/TBuild/source/out/Release'
-          $files = @((Join-Path $output "$env:PRODUCT.exe"), (Join-Path $output 'Updater.exe'))
-          foreach ($file in $files) { if (-not (Test-Path -LiteralPath $file)) { throw "Missing $file" } }
+          $product = Join-Path $output "$env:PRODUCT.exe"
+          if (-not (Test-Path -LiteralPath $product)) { throw "Missing $product" }
+          $files = @($product)
+          $updater = Join-Path $output 'Updater.exe'
+          if (Test-Path -LiteralPath $updater) { $files += $updater }
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           Compress-Archive -LiteralPath $files -DestinationPath "artifacts/crossgram-$env:TARGET-$env:BRAND-windows-$env:VERSION.zip"
 
