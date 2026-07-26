@@ -69,6 +69,10 @@ jobs:
           fetch-depth: 1
           path: source
 
+      - name: Check out 64Gram CMake helpers
+        if: matrix.build.target == 'tdesktop-x64'
+        run: git -C source submodule update --init --depth=1 cmake
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
