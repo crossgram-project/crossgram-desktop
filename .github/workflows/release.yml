@@ -291,6 +291,17 @@ jobs:
           mkdir -p artifacts
           ditto -c -k --sequesterRsrc --keepParent "$output/$PRODUCT.app" "artifacts/crossgram-$TARGET-$BRAND-macos-$VERSION.zip"
 
+      - name: Write release metadata
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        shell: bash
+        env:
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ steps.release.outputs.safe }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+        run: printf '%s\n' "$UPSTREAM_TAG" > "artifacts/crossgram-$TARGET-$BRAND-$PLATFORM-$VERSION.upstream-tag"
+
       - name: Upload artifact
         if: steps.exists.outputs.value != 'true' || inputs.force
         uses: actions/upload-artifact@v7
@@ -337,15 +348,6 @@ jobs:
             brand: discord
             repository: telegramdesktop/tdesktop
     steps:
-      - name: Resolve latest release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          UPSTREAM: ${{ matrix.build.repository }}
-        run: |
-          tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
       - name: Download successful platform builds
         continue-on-error: true
         uses: actions/download-artifact@v8
@@ -358,23 +360,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: crossgram/${{ matrix.build.target }}/${{ matrix.build.brand }}/${{ steps.release.outputs.tag }}
-          RELEASE_NAME: ${{ matrix.build.target }} / ${{ matrix.build.brand }} / ${{ steps.release.outputs.tag }}
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
           UPSTREAM: ${{ matrix.build.repository }}
-          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
         run: |
           if [ ! -d artifacts ]; then
             echo "No new platform artifacts for this target and brand."
             exit 0
           fi
-          mapfile -t files < <(find artifacts -maxdepth 1 -type f -print)
+          mapfile -t metadata < <(find artifacts -maxdepth 1 -type f -name '*.upstream-tag' -print)
+          if [ "${#metadata[@]}" -eq 0 ]; then
+            echo "No release metadata for this target and brand." >&2
+            exit 1
+          fi
+          mapfile -t tags < <(cat "${metadata[@]}" | sed '/^$/d' | sort -u)
+          if [ "${#tags[@]}" -ne 1 ]; then
+            printf 'Expected one upstream tag, found: %s\n' "${tags[*]}" >&2
+            exit 1
+          fi
+          upstream_tag="${tags[0]}"
+          release_tag="crossgram/$TARGET/$BRAND/$upstream_tag"
+          release_name="$TARGET / $BRAND / $upstream_tag"
+          mapfile -t files < <(find artifacts -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.xz' \) -print)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No new platform artifacts for this target and brand."
             exit 0
           fi
-          notes="Unofficial Crossgram build patched from $UPSTREAM release $UPSTREAM_TAG. Platform artifacts are published independently. Themed builds are not affiliated with or endorsed by the owner of the referenced application name or icon."
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+          notes="Unofficial Crossgram build patched from $UPSTREAM release $upstream_tag. Platform artifacts are published independently. Themed builds are not affiliated with or endorsed by the owner of the referenced application name or icon."
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "${files[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" "${files[@]}" --title "$RELEASE_NAME" --notes "$notes"
+            gh release create "$release_tag" "${files[@]}" --title "$release_name" --notes "$notes"
           fi
