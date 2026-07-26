@@ -160,8 +160,10 @@ jobs:
           function Get-BrandMetadata([string] $brand) {
             Push-Location $patcher
             try {
-              $json = (& yarn metadata --target $env:TARGET --brand $brand | Out-String)
+              $output = @(& yarn metadata --target $env:TARGET --brand $brand)
               if ($LASTEXITCODE -ne 0) { throw "Could not read metadata for $brand" }
+              $json = $output | Where-Object { $_ -match '^\{.*\}$' } | Select-Object -Last 1
+              if (-not $json) { throw "Metadata for $brand did not contain JSON" }
               return $json | ConvertFrom-Json
             } finally {
               Pop-Location
@@ -274,11 +276,19 @@ jobs:
             if [ "$reset" = true ]; then
               git -C "$source" checkout -- "${branding_paths[@]}"
             fi
-            yarn --cwd "$patcher" apply --target "$TARGET" --brand "$brand" --root "$source"
+            (cd "$patcher" && yarn apply --target "$TARGET" --brand "$brand" --root "$source")
             git -C "$source" diff --check
           }
           metadata_for() {
-            yarn --cwd "$patcher" metadata --target "$TARGET" --brand "$1"
+            local output json
+            output="$(cd "$patcher" && yarn metadata --target "$TARGET" --brand "$1")"
+            json="$(awk '/^\{.*\}$/ { value=$0 } END { print value }' <<<"$output")"
+            if [ -z "$json" ]; then
+              echo "Metadata for $1 did not contain JSON" >&2
+              return 1
+            fi
+            jq -e . >/dev/null <<<"$json"
+            printf '%s\n' "$json"
           }
 
           first_metadata="$(metadata_for "${brands[0]}")"
@@ -366,11 +376,19 @@ jobs:
             if [ "$reset" = true ]; then
               git -C "$source" checkout -- "${branding_paths[@]}"
             fi
-            yarn --cwd "$patcher" apply --target "$TARGET" --brand "$brand" --root "$source"
+            (cd "$patcher" && yarn apply --target "$TARGET" --brand "$brand" --root "$source")
             git -C "$source" diff --check
           }
           metadata_for() {
-            yarn --cwd "$patcher" metadata --target "$TARGET" --brand "$1"
+            local output json
+            output="$(cd "$patcher" && yarn metadata --target "$TARGET" --brand "$1")"
+            json="$(awk '/^\{.*\}$/ { value=$0 } END { print value }' <<<"$output")"
+            if [ -z "$json" ]; then
+              echo "Metadata for $1 did not contain JSON" >&2
+              return 1
+            fi
+            jq -e . >/dev/null <<<"$json"
+            printf '%s\n' "$json"
           }
 
           first_metadata="$(metadata_for "${brands[0]}")"
