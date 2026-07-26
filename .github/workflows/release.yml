@@ -34,11 +34,11 @@ jobs:
           - target: ayugram
             brand: cross
             repository: AyuGram/AyuGramDesktop
-            vsversion: "17.0"
+            vsversion: "18.0"
           - target: materialgram
             brand: cross
             repository: kukuruzka165/materialgram
-            vsversion: "17.0"
+            vsversion: "18.0"
           - target: tdesktop
             brand: qq
             repository: telegramdesktop/tdesktop
@@ -187,7 +187,8 @@ jobs:
         run: |
           python3 -m pip install --user poetry
           poetry install
-          DEBUG= LTO= poetry run gen_dockerfile > Dockerfile
+          generated="$(DEBUG= LTO= poetry run gen_dockerfile)"
+          printf '%s\n' "$generated" > Dockerfile
           docker build -t crossgram-tdesktop-build .
 
       - name: Build Linux
