@@ -46,6 +46,25 @@ export async function patchServerSwitch(options: PatchOptions): Promise<void> {
     );
   });
 
+  if (options.target.id === "tdesktop-x64") {
+    await context.edit("cmake/external/cmark_gfm/CMakeLists.txt", (file) => {
+      file.insertAfter(
+        "    set(CMAKE_SKIP_INSTALL_RULES TRUE)",
+        [
+          "",
+          "    # CMake 4.4 makes reads of the legacy deprecation variables below",
+          "    # a CMP0218 error under tdesktop's strict diagnostics.",
+          "    if (POLICY CMP0218)",
+          "        cmake_policy(SET CMP0218 NEW)",
+          "        set(CMAKE_POLICY_DEFAULT_CMP0218 NEW)",
+          "        cmake_diagnostic(SET CMD_AUTHOR IGNORE RECURSE)",
+          "    endif()",
+        ].join("\n"),
+        "cmake_policy(SET CMP0218 NEW)",
+      );
+    });
+  }
+
   await context.edit(`${sourceRoot}/mtproto/mtproto_dc_options.h`, (file) => {
     file.insertAfter(
       "\t[[nodiscard]] bool isTestMode() const;",
