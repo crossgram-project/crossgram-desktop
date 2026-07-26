@@ -1,0 +1,361 @@
+name: Build latest releases
+
+on:
+  schedule:
+    - cron: "43 3 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild releases that already exist
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.build.target }} / ${{ matrix.build.brand }} / ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows, linux, macos]
+        build:
+          - target: tdesktop
+            brand: cross
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop-x64
+            brand: cross
+            repository: TDesktop-x64/tdesktop
+            vsversion: "18.0"
+          - target: ayugram
+            brand: cross
+            repository: AyuGram/AyuGramDesktop
+            vsversion: "17.0"
+          - target: materialgram
+            brand: cross
+            repository: kukuruzka165/materialgram
+            vsversion: "17.0"
+          - target: tdesktop
+            brand: qq
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: wechat
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: wecom
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: dingtalk
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: discord
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+    steps:
+      - name: Check out patcher
+        uses: actions/checkout@v7
+        with:
+          path: patcher
+
+      - name: Resolve latest release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM: ${{ matrix.build.repository }}
+        run: |
+          tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
+          safe="$(printf '%s' "$tag" | tr '/ :' '---')"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "safe=$safe" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether platform artifact exists
+        id: exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: crossgram/${{ matrix.build.target }}/${{ matrix.build.brand }}/${{ steps.release.outputs.tag }}
+          ASSET_PREFIX: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}-${{ matrix.platform }}-${{ steps.release.outputs.safe }}
+        run: |
+          assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
+          if grep -q "^$ASSET_PREFIX\." <<<"$assets"; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out upstream
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ matrix.build.repository }}
+          ref: ${{ steps.release.outputs.tag }}
+          fetch-depth: 1
+          submodules: recursive
+          path: work/TBuild/source
+
+      - name: Set up Node.js
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        run: corepack enable
+
+      - name: Read build metadata
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        id: metadata
+        shell: bash
+        working-directory: patcher
+        env:
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
+        run: |
+          yarn install --immutable
+          yarn metadata --target "$TARGET" --brand "$BRAND" --github-output
+
+      - name: Apply features
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        shell: bash
+        working-directory: patcher
+        env:
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
+        run: |
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/work/TBuild/source"
+          git -C "$GITHUB_WORKSPACE/work/TBuild/source" diff --check
+
+      - name: Initialize MSVC
+        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          sdk: 10.0.26100.0
+          toolset: "14.44"
+          vsversion: ${{ matrix.build.vsversion }}
+
+      - name: Prepare and build Windows
+        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
+        shell: cmd
+        env:
+          DEFAULT_API_ID: ${{ steps.metadata.outputs.apiId }}
+          DEFAULT_API_HASH: ${{ steps.metadata.outputs.apiHash }}
+          OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          cd /d %GITHUB_WORKSPACE%\work\TBuild\source\Telegram
+          call build\prepare\win.bat silent qt6
+          if errorlevel 1 exit /b %errorlevel%
+          set EFFECTIVE_API_ID=%DEFAULT_API_ID%
+          set EFFECTIVE_API_HASH=%DEFAULT_API_HASH%
+          if not "%OVERRIDE_API_ID%%OVERRIDE_API_HASH%"=="" if "%OVERRIDE_API_ID%"=="" exit /b 1
+          if not "%OVERRIDE_API_ID%%OVERRIDE_API_HASH%"=="" if "%OVERRIDE_API_HASH%"=="" exit /b 1
+          if not "%OVERRIDE_API_ID%"=="" set EFFECTIVE_API_ID=%OVERRIDE_API_ID%
+          if not "%OVERRIDE_API_HASH%"=="" set EFFECTIVE_API_HASH=%OVERRIDE_API_HASH%
+          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%EFFECTIVE_API_ID% -D TDESKTOP_API_HASH=%EFFECTIVE_API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
+          if errorlevel 1 exit /b %errorlevel%
+          cmake --build ..\out --config Release --parallel
+
+      - name: Package Windows
+        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
+        shell: pwsh
+        env:
+          PRODUCT: ${{ steps.metadata.outputs.executable }}
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
+          VERSION: ${{ steps.release.outputs.safe }}
+        run: |
+          $output = Join-Path $env:GITHUB_WORKSPACE 'work/TBuild/source/out/Release'
+          $files = @((Join-Path $output "$env:PRODUCT.exe"), (Join-Path $output 'Updater.exe'))
+          foreach ($file in $files) { if (-not (Test-Path -LiteralPath $file)) { throw "Missing $file" } }
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Compress-Archive -LiteralPath $files -DestinationPath "artifacts/crossgram-$env:TARGET-$env:BRAND-windows-$env:VERSION.zip"
+
+      - name: Prepare Linux image
+        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
+        working-directory: work/TBuild/source/Telegram/build/docker/centos_env
+        run: |
+          python3 -m pip install --user poetry
+          poetry install
+          DEBUG= LTO= poetry run gen_dockerfile > Dockerfile
+          docker build -t crossgram-tdesktop-build .
+
+      - name: Build Linux
+        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
+        env:
+          DEFAULT_API_ID: ${{ steps.metadata.outputs.apiId }}
+          DEFAULT_API_HASH: ${{ steps.metadata.outputs.apiHash }}
+          OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          effective_id="$DEFAULT_API_ID"
+          effective_hash="$DEFAULT_API_HASH"
+          if [ -n "$OVERRIDE_API_ID$OVERRIDE_API_HASH" ]; then
+            test -n "$OVERRIDE_API_ID" && test -n "$OVERRIDE_API_HASH"
+            effective_id="$OVERRIDE_API_ID"
+            effective_hash="$OVERRIDE_API_HASH"
+          fi
+          cd work/TBuild/source
+          docker run --rm \
+            -u "$(id -u)" \
+            -v "$PWD:/usr/src/tdesktop" \
+            -e CONFIG=Release \
+            crossgram-tdesktop-build \
+            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D "TDESKTOP_API_ID=$effective_id" \
+            -D "TDESKTOP_API_HASH=$effective_hash"
+
+      - name: Package Linux
+        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
+        env:
+          PRODUCT: ${{ steps.metadata.outputs.executable }}
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
+          VERSION: ${{ steps.release.outputs.safe }}
+        run: |
+          output="work/TBuild/source/out/Release"
+          test -f "$output/$PRODUCT"
+          mkdir -p artifacts/package
+          cp "$output/$PRODUCT" artifacts/package/
+          test ! -f "$output/Updater" || cp "$output/Updater" artifacts/package/
+          tar -C artifacts/package -cJf "artifacts/crossgram-$TARGET-$BRAND-linux-$VERSION.tar.xz" .
+
+      - name: Prepare and build macOS
+        if: runner.os == 'macOS' && (steps.exists.outputs.value != 'true' || inputs.force)
+        env:
+          DEFAULT_API_ID: ${{ steps.metadata.outputs.apiId }}
+          DEFAULT_API_HASH: ${{ steps.metadata.outputs.apiHash }}
+          OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          brew install automake libtool meson nasm ninja pkg-config
+          effective_id="$DEFAULT_API_ID"
+          effective_hash="$DEFAULT_API_HASH"
+          if [ -n "$OVERRIDE_API_ID$OVERRIDE_API_HASH" ]; then
+            test -n "$OVERRIDE_API_ID" && test -n "$OVERRIDE_API_HASH"
+            effective_id="$OVERRIDE_API_ID"
+            effective_hash="$OVERRIDE_API_HASH"
+          fi
+          cd work/TBuild
+          ./source/Telegram/build/prepare/mac.sh silent
+          cd source/Telegram
+          ./configure.sh \
+            -D CMAKE_CONFIGURATION_TYPES=Release \
+            -D CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+            -D "TDESKTOP_API_ID=$effective_id" \
+            -D "TDESKTOP_API_HASH=$effective_hash"
+          cmake --build ../out --config Release --parallel
+
+      - name: Package macOS
+        if: runner.os == 'macOS' && (steps.exists.outputs.value != 'true' || inputs.force)
+        env:
+          PRODUCT: ${{ steps.metadata.outputs.executable }}
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
+          VERSION: ${{ steps.release.outputs.safe }}
+        run: |
+          output="work/TBuild/source/out/Release"
+          test -d "$output/$PRODUCT.app"
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$output/$PRODUCT.app" "artifacts/crossgram-$TARGET-$BRAND-macos-$VERSION.zip"
+
+      - name: Upload artifact
+        if: steps.exists.outputs.value != 'true' || inputs.force
+        uses: actions/upload-artifact@v7
+        with:
+          name: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}-${{ matrix.platform }}-${{ steps.release.outputs.safe }}
+          path: artifacts/crossgram-*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish ${{ matrix.build.target }} / ${{ matrix.build.brand }}
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - target: tdesktop
+            brand: cross
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop-x64
+            brand: cross
+            repository: TDesktop-x64/tdesktop
+          - target: ayugram
+            brand: cross
+            repository: AyuGram/AyuGramDesktop
+          - target: materialgram
+            brand: cross
+            repository: kukuruzka165/materialgram
+          - target: tdesktop
+            brand: qq
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: wechat
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: wecom
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: dingtalk
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
+            brand: discord
+            repository: telegramdesktop/tdesktop
+    steps:
+      - name: Resolve latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM: ${{ matrix.build.repository }}
+        run: |
+          tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Download successful platform builds
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: crossgram/${{ matrix.build.target }}/${{ matrix.build.brand }}/${{ steps.release.outputs.tag }}
+          RELEASE_NAME: ${{ matrix.build.target }} / ${{ matrix.build.brand }} / ${{ steps.release.outputs.tag }}
+          UPSTREAM: ${{ matrix.build.repository }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if [ ! -d artifacts ]; then
+            echo "No new platform artifacts for this target and brand."
+            exit 0
+          fi
+          mapfile -t files < <(find artifacts -maxdepth 1 -type f -print)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No new platform artifacts for this target and brand."
+            exit 0
+          fi
+          notes="Unofficial Crossgram build patched from $UPSTREAM release $UPSTREAM_TAG. Platform artifacts are published independently. Themed builds are not affiliated with or endorsed by the owner of the referenced application name or icon."
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${files[@]}" --title "$RELEASE_NAME" --notes "$notes"
+          fi
