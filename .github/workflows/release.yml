@@ -5,6 +5,17 @@ on:
     - cron: "43 3 * * *"
   workflow_dispatch:
     inputs:
+      platforms:
+        description: Platforms to build
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - windows-linux
+          - windows
+          - linux
+          - macos
       force:
         description: Rebuild releases that already exist
         required: false
@@ -21,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows, linux, macos]
+        platform: ${{ fromJSON(inputs.platforms == 'windows-linux' && '["windows","linux"]' || inputs.platforms == 'windows' && '["windows"]' || inputs.platforms == 'linux' && '["linux"]' || inputs.platforms == 'macos' && '["macos"]' || '["windows","linux","macos"]') }}
         build:
           - target: tdesktop
             brand: cross
