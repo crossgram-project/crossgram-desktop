@@ -212,12 +212,12 @@ void ShowEditor(
 		controller->showToast(u"Server configuration applied to this account."_q);
 	};
 
-	box->addButton(u"Confirm"_q, submit);
-	box->addButton(u"Read from clipboard"_q, [=] {
+	box->addButton(rpl::single(u"Confirm"_q), submit);
+	box->addButton(rpl::single(u"Read from clipboard"_q), [=] {
 		field->setText(QGuiApplication::clipboard()->text());
 		field->setFocusFast();
 	});
-	box->addButton(u"Cancel"_q, [=] { box->closeBox(); });
+	box->addButton(rpl::single(u"Cancel"_q), [=] { box->closeBox(); });
 }
 
 void UseOfficial(

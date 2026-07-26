@@ -16,7 +16,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Check out patcher
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: patcher
 
@@ -28,7 +28,7 @@ jobs:
         run: echo "tag=$(gh api repos/telegramdesktop/tdesktop/releases/latest --jq .tag_name)" >> "$GITHUB_OUTPUT"
 
       - name: Check out upstream
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: telegramdesktop/tdesktop
           ref: ${{ steps.release.outputs.tag }}
@@ -37,7 +37,7 @@ jobs:
           path: work/TBuild/source
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
