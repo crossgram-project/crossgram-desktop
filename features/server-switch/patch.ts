@@ -38,6 +38,14 @@ export async function patchServerSwitch(options: PatchOptions): Promise<void> {
     );
   });
 
+  await context.edit("Telegram/build/prepare/prepare.py", (file) => {
+    file.replace(
+      '    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64"',
+      '    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64" /property:IncludePath="%INCLUDE%" /property:LibraryPath="%LIB%"',
+      '/property:IncludePath="%INCLUDE%" /property:LibraryPath="%LIB%"',
+    );
+  });
+
   await context.edit(`${sourceRoot}/mtproto/mtproto_dc_options.h`, (file) => {
     file.insertAfter(
       "\t[[nodiscard]] bool isTestMode() const;",
