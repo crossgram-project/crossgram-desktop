@@ -182,6 +182,23 @@ jobs:
           if errorlevel 1 exit /b %errorlevel%
           cmake --build ..\out --config Release --parallel
 
+      - name: Smoke test Windows
+        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
+        shell: pwsh
+        env:
+          PRODUCT: ${{ steps.metadata.outputs.executable }}
+        run: |
+          $product = Join-Path $env:GITHUB_WORKSPACE "work/TBuild/source/out/Release/$env:PRODUCT.exe"
+          if (-not (Test-Path -LiteralPath $product)) { throw "Missing $product" }
+          $workdir = Join-Path $env:RUNNER_TEMP 'crossgram-smoke'
+          New-Item -ItemType Directory -Force -Path $workdir | Out-Null
+          $process = Start-Process -FilePath $product -ArgumentList '-quit', '-noupdate', '-workdir', $workdir -PassThru
+          if (-not $process.WaitForExit(60000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "$product did not exit within 60 seconds"
+          }
+          if ($process.ExitCode -ne 0) { throw "$product exited with code $($process.ExitCode)" }
+
       - name: Package Windows
         if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
         shell: pwsh
@@ -239,6 +256,19 @@ jobs:
             -D "TDESKTOP_API_ID=$effective_id" \
             -D "TDESKTOP_API_HASH=$effective_hash"
 
+      - name: Smoke test Linux
+        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
+        env:
+          PRODUCT: ${{ steps.metadata.outputs.executable }}
+        run: |
+          product="$GITHUB_WORKSPACE/work/TBuild/source/out/Release/$PRODUCT"
+          test -x "$product"
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          timeout 60s xvfb-run -a "$product" -quit -noupdate -workdir "$workdir"
+
       - name: Package Linux
         if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
         env:
@@ -280,6 +310,29 @@ jobs:
             -D "TDESKTOP_API_ID=$effective_id" \
             -D "TDESKTOP_API_HASH=$effective_hash"
           cmake --build ../out --config Release --parallel
+
+      - name: Smoke test macOS
+        if: runner.os == 'macOS' && (steps.exists.outputs.value != 'true' || inputs.force)
+        env:
+          PRODUCT: ${{ steps.metadata.outputs.executable }}
+        run: |
+          product="$GITHUB_WORKSPACE/work/TBuild/source/out/Release/$PRODUCT.app/Contents/MacOS/$PRODUCT"
+          test -x "$product"
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          "$product" -quit -noupdate -workdir "$workdir" &
+          pid=$!
+          for _ in {1..60}; do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              wait "$pid"
+              exit $?
+            fi
+            sleep 1
+          done
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          echo "$product did not exit within 60 seconds" >&2
+          exit 1
 
       - name: Package macOS
         if: runner.os == 'macOS' && (steps.exists.outputs.value != 'true' || inputs.force)
