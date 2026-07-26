@@ -225,10 +225,12 @@ jobs:
           cd work/TBuild/source
           docker run --rm \
             -u "$(id -u)" \
+            -w /usr/src/tdesktop \
             -v "$PWD:/usr/src/tdesktop" \
             -e CONFIG=Release \
             crossgram-tdesktop-build \
             /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+            -Wno-error=policy \
             -D CMAKE_CONFIGURATION_TYPES=Release \
             -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
             -D "TDESKTOP_API_ID=$effective_id" \
