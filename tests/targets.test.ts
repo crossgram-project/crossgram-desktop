@@ -38,11 +38,15 @@ describe("targets", () => {
     const matrixBuilds = (workflow: string) =>
       [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brand: (\S+)$/gm)]
         .map((match) => `${match[1]}/${match[2]}`);
+    const groupedMatrixBuilds = (workflow: string) =>
+      [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brands: '([^']+)'$/gm)]
+        .flatMap((match) => (JSON.parse(match[2]!) as string[])
+          .map((brand) => `${match[1]}/${brand}`));
     const publishTargets = (workflow: string) =>
       [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+repository:/gm)]
         .map((match) => match[1]);
     expect(matrixBuilds(check)).toEqual(expected);
-    expect(matrixBuilds(release)).toEqual(expected);
+    expect(groupedMatrixBuilds(release).sort()).toEqual([...expected].sort());
     expect(publishTargets(release)).toEqual(targets.map(({ id }) => id));
   });
 });

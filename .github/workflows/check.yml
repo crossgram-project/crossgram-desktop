@@ -98,3 +98,27 @@ jobs:
           yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source"
           after="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
           test "$before" = "$after"
+
+      - name: Verify in-place brand switching
+        if: matrix.build.target == 'tdesktop' && matrix.build.brand == 'cross'
+        working-directory: patcher
+        run: |
+          branding_paths=(
+            Telegram/SourceFiles/core/version.h
+            Telegram/CMakeLists.txt
+            Telegram/Telegram.plist
+            Telegram/Resources/winrc
+            Telegram/Resources/art
+            Telegram/Telegram/Images.xcassets
+            Telegram/Resources/qrc/telegram/telegram.qrc
+            Telegram/SourceFiles/platform/linux/specific_linux.cpp
+            lib/xdg
+          )
+          for brand in qq discord; do
+            git -C "$GITHUB_WORKSPACE/source" checkout -- "${branding_paths[@]}"
+            yarn apply --target tdesktop --brand "$brand" --root "$GITHUB_WORKSPACE/source"
+            git -C "$GITHUB_WORKSPACE/source" diff --check
+            metadata="$(yarn metadata --target tdesktop --brand "$brand")"
+            executable="$(jq -r .executable <<<"$metadata")"
+            grep -Fq "set(output_name \"$executable\")" "$GITHUB_WORKSPACE/source/Telegram/CMakeLists.txt"
+          done

@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.build.target }} / ${{ matrix.build.brand }} / ${{ matrix.platform }}
+    name: ${{ matrix.build.target }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -35,40 +35,20 @@ jobs:
         platform: ${{ fromJSON(inputs.platforms == 'windows-linux' && '["windows","linux"]' || inputs.platforms == 'windows' && '["windows"]' || inputs.platforms == 'linux' && '["linux"]' || inputs.platforms == 'macos' && '["macos"]' || '["windows","linux","macos"]') }}
         build:
           - target: tdesktop
-            brand: cross
+            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             repository: telegramdesktop/tdesktop
             vsversion: "18.0"
           - target: tdesktop-x64
-            brand: cross
+            brands: '["cross"]'
             repository: TDesktop-x64/tdesktop
             vsversion: "18.0"
           - target: ayugram
-            brand: cross
+            brands: '["cross"]'
             repository: AyuGram/AyuGramDesktop
             vsversion: "18.0"
           - target: materialgram
-            brand: cross
+            brands: '["cross"]'
             repository: kukuruzka165/materialgram
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: qq
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: wechat
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: wecom
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: dingtalk
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: discord
-            repository: telegramdesktop/tdesktop
             vsversion: "18.0"
     steps:
       - name: Check out patcher
@@ -88,23 +68,37 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "safe=$safe" >> "$GITHUB_OUTPUT"
 
-      - name: Check whether platform artifact exists
-        id: exists
+      - name: Resolve brands to build
+        id: plan
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: crossgram/${{ matrix.build.target }}/${{ steps.release.outputs.tag }}
-          ASSET_PREFIX: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}-${{ matrix.platform }}-${{ steps.release.outputs.safe }}
+          ASSET_PREFIX: crossgram-${{ matrix.build.target }}
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ steps.release.outputs.safe }}
+          BRANDS: ${{ matrix.build.brands }}
+          FORCE: ${{ inputs.force }}
         run: |
           assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
-          if grep -q "^$ASSET_PREFIX\." <<<"$assets"; then
-            echo "value=true" >> "$GITHUB_OUTPUT"
+          missing=()
+          while IFS= read -r brand; do
+            prefix="$ASSET_PREFIX-$brand-$PLATFORM-$VERSION"
+            if [ "$FORCE" = true ] || ! grep -q "^$prefix\." <<<"$assets"; then
+              missing+=("$brand")
+            fi
+          done < <(jq -r '.[]' <<<"$BRANDS")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            brands="$(printf '%s\n' "${missing[@]}" | jq -R . | jq -sc .)"
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "brands=$brands" >> "$GITHUB_OUTPUT"
           else
-            echo "value=false" >> "$GITHUB_OUTPUT"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo 'brands=[]' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check out upstream
-        if: steps.exists.outputs.value != 'true' || inputs.force
+        if: steps.plan.outputs.needed == 'true'
         uses: actions/checkout@v7
         with:
           repository: ${{ matrix.build.repository }}
@@ -114,40 +108,22 @@ jobs:
           path: work/TBuild/source
 
       - name: Set up Node.js
-        if: steps.exists.outputs.value != 'true' || inputs.force
+        if: steps.plan.outputs.needed == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 24
 
       - name: Enable Corepack
-        if: steps.exists.outputs.value != 'true' || inputs.force
+        if: steps.plan.outputs.needed == 'true'
         run: corepack enable
 
-      - name: Read build metadata
-        if: steps.exists.outputs.value != 'true' || inputs.force
-        id: metadata
-        shell: bash
+      - name: Install patcher
+        if: steps.plan.outputs.needed == 'true'
         working-directory: patcher
-        env:
-          TARGET: ${{ matrix.build.target }}
-          BRAND: ${{ matrix.build.brand }}
-        run: |
-          yarn install --immutable
-          yarn metadata --target "$TARGET" --brand "$BRAND" --github-output
-
-      - name: Apply features
-        if: steps.exists.outputs.value != 'true' || inputs.force
-        shell: bash
-        working-directory: patcher
-        env:
-          TARGET: ${{ matrix.build.target }}
-          BRAND: ${{ matrix.build.brand }}
-        run: |
-          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/work/TBuild/source"
-          git -C "$GITHUB_WORKSPACE/work/TBuild/source" diff --check
+        run: yarn install --immutable
 
       - name: Initialize MSVC
-        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
+        if: runner.os == 'Windows' && steps.plan.outputs.needed == 'true'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -155,216 +131,310 @@ jobs:
           toolset: "14.44"
           vsversion: ${{ matrix.build.vsversion }}
 
-      - name: Prepare and build Windows
-        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
-        shell: cmd
+      - name: Build, smoke test, and package Windows brands
+        if: runner.os == 'Windows' && steps.plan.outputs.needed == 'true'
+        shell: pwsh
         env:
-          DEFAULT_API_ID: ${{ steps.metadata.outputs.apiId }}
-          DEFAULT_API_HASH: ${{ steps.metadata.outputs.apiHash }}
+          TARGET: ${{ matrix.build.target }}
+          BRANDS: ${{ steps.plan.outputs.brands }}
+          VERSION: ${{ steps.release.outputs.safe }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
-          cd /d %GITHUB_WORKSPACE%\work\TBuild\source\Telegram
-          set "ATL_ROOT="
-          for /d %%D in ("%VCINSTALLDIR%Tools\MSVC\*") do if exist "%%~fD\atlmfc\include\atlbase.h" set "ATL_ROOT=%%~fD\atlmfc"
-          if not defined ATL_ROOT exit /b 1
-          set "INCLUDE=%ATL_ROOT%\include;%INCLUDE%"
-          set "LIB=%ATL_ROOT%\lib\x64;%LIB%"
-          call build\prepare\win.bat silent qt6
-          if errorlevel 1 exit /b %errorlevel%
-          set EFFECTIVE_API_ID=%DEFAULT_API_ID%
-          set EFFECTIVE_API_HASH=%DEFAULT_API_HASH%
-          if not "%OVERRIDE_API_ID%%OVERRIDE_API_HASH%"=="" if "%OVERRIDE_API_ID%"=="" exit /b 1
-          if not "%OVERRIDE_API_ID%%OVERRIDE_API_HASH%"=="" if "%OVERRIDE_API_HASH%"=="" exit /b 1
-          if not "%OVERRIDE_API_ID%"=="" set EFFECTIVE_API_ID=%OVERRIDE_API_ID%
-          if not "%OVERRIDE_API_HASH%"=="" set EFFECTIVE_API_HASH=%OVERRIDE_API_HASH%
-          call configure.bat qt6 "-GNinja Multi-Config" -D TDESKTOP_API_ID=%EFFECTIVE_API_ID% -D TDESKTOP_API_HASH=%EFFECTIVE_API_HASH% -D CMAKE_CONFIGURATION_TYPES=Release -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON
-          if errorlevel 1 exit /b %errorlevel%
-          cmake --build ..\out --config Release --parallel
-
-      - name: Smoke test Windows
-        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
-        shell: pwsh
-        env:
-          PRODUCT: ${{ steps.metadata.outputs.executable }}
-        run: |
-          $product = Join-Path $env:GITHUB_WORKSPACE "work/TBuild/source/out/Release/$env:PRODUCT.exe"
-          if (-not (Test-Path -LiteralPath $product)) { throw "Missing $product" }
-          $workdir = Join-Path $env:RUNNER_TEMP 'crossgram-smoke'
-          New-Item -ItemType Directory -Force -Path $workdir | Out-Null
-          $process = Start-Process -FilePath $product -ArgumentList '-quit', '-noupdate', '-workdir', $workdir -PassThru
-          if (-not $process.WaitForExit(60000)) {
-            Stop-Process -Id $process.Id -Force
-            throw "$product did not exit within 60 seconds"
+          $source = Join-Path $env:GITHUB_WORKSPACE 'work/TBuild/source'
+          $telegram = Join-Path $source 'Telegram'
+          $patcher = Join-Path $env:GITHUB_WORKSPACE 'patcher'
+          $brands = @($env:BRANDS | ConvertFrom-Json)
+          $brandingPaths = @(
+            'Telegram/SourceFiles/core/version.h',
+            'Telegram/CMakeLists.txt',
+            'Telegram/Telegram.plist',
+            'Telegram/Resources/winrc',
+            'Telegram/Resources/art',
+            'Telegram/Telegram/Images.xcassets',
+            'Telegram/Resources/qrc/telegram/telegram.qrc',
+            'Telegram/SourceFiles/platform/linux/specific_linux.cpp',
+            'lib/xdg'
+          )
+          function Get-BrandMetadata([string] $brand) {
+            Push-Location $patcher
+            try {
+              $json = (& yarn metadata --target $env:TARGET --brand $brand | Out-String)
+              if ($LASTEXITCODE -ne 0) { throw "Could not read metadata for $brand" }
+              return $json | ConvertFrom-Json
+            } finally {
+              Pop-Location
+            }
           }
-          if ($process.ExitCode -ne 0) { throw "$product exited with code $($process.ExitCode)" }
+          function Set-Brand([string] $brand, [bool] $reset) {
+            if ($reset) {
+              & git -C $source checkout -- $brandingPaths
+              if ($LASTEXITCODE -ne 0) { throw "Could not reset branding files" }
+            }
+            Push-Location $patcher
+            try {
+              & yarn apply --target $env:TARGET --brand $brand --root $source
+              if ($LASTEXITCODE -ne 0) { throw "Could not apply brand $brand" }
+            } finally {
+              Pop-Location
+            }
+            & git -C $source diff --check
+            if ($LASTEXITCODE -ne 0) { throw "Patch validation failed for $brand" }
+          }
 
-      - name: Package Windows
-        if: runner.os == 'Windows' && (steps.exists.outputs.value != 'true' || inputs.force)
-        shell: pwsh
-        env:
-          PRODUCT: ${{ steps.metadata.outputs.executable }}
-          TARGET: ${{ matrix.build.target }}
-          BRAND: ${{ matrix.build.brand }}
-          VERSION: ${{ steps.release.outputs.safe }}
-        run: |
-          $output = Join-Path $env:GITHUB_WORKSPACE 'work/TBuild/source/out/Release'
-          $product = Join-Path $output "$env:PRODUCT.exe"
-          if (-not (Test-Path -LiteralPath $product)) { throw "Missing $product" }
-          $files = @($product)
-          $updater = Join-Path $output 'Updater.exe'
-          if (Test-Path -LiteralPath $updater) { $files += $updater }
+          $firstMetadata = Get-BrandMetadata $brands[0]
+          Set-Brand $brands[0] $false
+          $atlRoot = Get-ChildItem (Join-Path $env:VCINSTALLDIR 'Tools/MSVC') -Directory |
+            ForEach-Object { Join-Path $_.FullName 'atlmfc' } |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_ 'include/atlbase.h') } |
+            Select-Object -Last 1
+          if (-not $atlRoot) { throw 'Could not locate ATL' }
+          $env:INCLUDE = "$(Join-Path $atlRoot 'include');$env:INCLUDE"
+          $env:LIB = "$(Join-Path $atlRoot 'lib/x64');$env:LIB"
+          Push-Location $telegram
+          try {
+            & .\build\prepare\win.bat silent qt6
+            if ($LASTEXITCODE -ne 0) { throw 'Windows dependency preparation failed' }
+          } finally {
+            Pop-Location
+          }
+
+          $effectiveId = [string]$firstMetadata.apiId
+          $effectiveHash = [string]$firstMetadata.apiHash
+          if ($env:OVERRIDE_API_ID -or $env:OVERRIDE_API_HASH) {
+            if (-not $env:OVERRIDE_API_ID -or -not $env:OVERRIDE_API_HASH) { throw 'Both API overrides are required' }
+            $effectiveId = $env:OVERRIDE_API_ID
+            $effectiveHash = $env:OVERRIDE_API_HASH
+          }
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          Compress-Archive -LiteralPath $files -DestinationPath "artifacts/crossgram-$env:TARGET-$env:BRAND-windows-$env:VERSION.zip"
+          for ($index = 0; $index -lt $brands.Count; $index += 1) {
+            $brand = [string]$brands[$index]
+            if ($index -gt 0) { Set-Brand $brand $true }
+            $metadata = Get-BrandMetadata $brand
+            Push-Location $telegram
+            try {
+              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
+              if ($LASTEXITCODE -ne 0) { throw "Configure failed for $brand" }
+              & cmake --build ..\out --config Release --parallel
+              if ($LASTEXITCODE -ne 0) { throw "Build failed for $brand" }
+            } finally {
+              Pop-Location
+            }
 
-      - name: Prepare Linux image
-        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
-        working-directory: work/TBuild/source/Telegram/build/docker/centos_env
+            $output = Join-Path $source 'out/Release'
+            $product = Join-Path $output "$($metadata.executable).exe"
+            if (-not (Test-Path -LiteralPath $product)) { throw "Missing $product" }
+            $workdir = Join-Path $env:RUNNER_TEMP "crossgram-smoke-$brand"
+            New-Item -ItemType Directory -Force -Path $workdir | Out-Null
+            $process = Start-Process -FilePath $product -ArgumentList '-quit', '-noupdate', '-workdir', $workdir -PassThru
+            if (-not $process.WaitForExit(60000)) {
+              Stop-Process -Id $process.Id -Force
+              throw "$product did not exit within 60 seconds"
+            }
+            if ($process.ExitCode -ne 0) { throw "$product exited with code $($process.ExitCode)" }
+
+            $files = @($product)
+            $updater = Join-Path $output 'Updater.exe'
+            if (Test-Path -LiteralPath $updater) { $files += $updater }
+            $archive = "artifacts/crossgram-$env:TARGET-$brand-windows-$env:VERSION.zip"
+            Compress-Archive -LiteralPath $files -DestinationPath $archive -Force
+            $tagFile = "artifacts/crossgram-$env:TARGET-$brand-windows-$env:VERSION.upstream-tag"
+            [IO.File]::WriteAllText($tagFile, "$env:UPSTREAM_TAG`n", [Text.UTF8Encoding]::new($false))
+          }
+
+      - name: Build, smoke test, and package Linux brands
+        if: runner.os == 'Linux' && steps.plan.outputs.needed == 'true'
+        env:
+          TARGET: ${{ matrix.build.target }}
+          BRANDS: ${{ steps.plan.outputs.brands }}
+          VERSION: ${{ steps.release.outputs.safe }}
+          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+          OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
+          source="$GITHUB_WORKSPACE/work/TBuild/source"
+          patcher="$GITHUB_WORKSPACE/patcher"
+          brands=()
+          while IFS= read -r brand; do brands+=("$brand"); done < <(jq -r '.[]' <<<"$BRANDS")
+          branding_paths=(
+            Telegram/SourceFiles/core/version.h
+            Telegram/CMakeLists.txt
+            Telegram/Telegram.plist
+            Telegram/Resources/winrc
+            Telegram/Resources/art
+            Telegram/Telegram/Images.xcassets
+            Telegram/Resources/qrc/telegram/telegram.qrc
+            Telegram/SourceFiles/platform/linux/specific_linux.cpp
+            lib/xdg
+          )
+          apply_brand() {
+            local brand="$1"
+            local reset="$2"
+            if [ "$reset" = true ]; then
+              git -C "$source" checkout -- "${branding_paths[@]}"
+            fi
+            yarn --cwd "$patcher" apply --target "$TARGET" --brand "$brand" --root "$source"
+            git -C "$source" diff --check
+          }
+          metadata_for() {
+            yarn --cwd "$patcher" metadata --target "$TARGET" --brand "$1"
+          }
+
+          first_metadata="$(metadata_for "${brands[0]}")"
+          apply_brand "${brands[0]}" false
+          cd "$source/Telegram/build/docker/centos_env"
           python3 -m pip install --user poetry
           poetry install
           generated="$(DEBUG= LTO= poetry run gen_dockerfile)"
           printf '%s\n' "$generated" > Dockerfile
           docker build -t crossgram-tdesktop-build .
-
-      - name: Build Linux
-        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
-        env:
-          DEFAULT_API_ID: ${{ steps.metadata.outputs.apiId }}
-          DEFAULT_API_HASH: ${{ steps.metadata.outputs.apiHash }}
-          OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
-          OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
-        run: |
-          effective_id="$DEFAULT_API_ID"
-          effective_hash="$DEFAULT_API_HASH"
-          if [ -n "$OVERRIDE_API_ID$OVERRIDE_API_HASH" ]; then
-            test -n "$OVERRIDE_API_ID" && test -n "$OVERRIDE_API_HASH"
-            effective_id="$OVERRIDE_API_ID"
-            effective_hash="$OVERRIDE_API_HASH"
-          fi
-          cd work/TBuild/source
-          docker run --rm \
-            -u "$(id -u)" \
-            -w /usr/src/tdesktop \
-            -v "$PWD:/usr/src/tdesktop" \
-            -e CONFIG=Release \
-            crossgram-tdesktop-build \
-            /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-            -Wno-error=policy \
-            -D CMAKE_CONFIGURATION_TYPES=Release \
-            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
-            -D "TDESKTOP_API_ID=$effective_id" \
-            -D "TDESKTOP_API_HASH=$effective_hash"
-
-      - name: Smoke test Linux
-        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
-        env:
-          PRODUCT: ${{ steps.metadata.outputs.executable }}
-        run: |
-          product="$GITHUB_WORKSPACE/work/TBuild/source/out/Release/$PRODUCT"
-          test -x "$product"
-          workdir="$(mktemp -d)"
-          trap 'rm -rf "$workdir"' EXIT
           sudo apt-get update
           sudo apt-get install -y xvfb
-          timeout 60s xvfb-run -a "$product" -quit -noupdate -workdir "$workdir"
 
-      - name: Package Linux
-        if: runner.os == 'Linux' && (steps.exists.outputs.value != 'true' || inputs.force)
-        env:
-          PRODUCT: ${{ steps.metadata.outputs.executable }}
-          TARGET: ${{ matrix.build.target }}
-          BRAND: ${{ matrix.build.brand }}
-          VERSION: ${{ steps.release.outputs.safe }}
-        run: |
-          output="work/TBuild/source/out/Release"
-          test -f "$output/$PRODUCT"
-          mkdir -p artifacts/package
-          cp "$output/$PRODUCT" artifacts/package/
-          test ! -f "$output/Updater" || cp "$output/Updater" artifacts/package/
-          tar -C artifacts/package -cJf "artifacts/crossgram-$TARGET-$BRAND-linux-$VERSION.tar.xz" .
-
-      - name: Prepare and build macOS
-        if: runner.os == 'macOS' && (steps.exists.outputs.value != 'true' || inputs.force)
-        env:
-          DEFAULT_API_ID: ${{ steps.metadata.outputs.apiId }}
-          DEFAULT_API_HASH: ${{ steps.metadata.outputs.apiHash }}
-          OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
-          OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
-        run: |
-          brew install automake libtool meson nasm ninja pkg-config
-          effective_id="$DEFAULT_API_ID"
-          effective_hash="$DEFAULT_API_HASH"
+          effective_id="$(jq -r .apiId <<<"$first_metadata")"
+          effective_hash="$(jq -r .apiHash <<<"$first_metadata")"
           if [ -n "$OVERRIDE_API_ID$OVERRIDE_API_HASH" ]; then
             test -n "$OVERRIDE_API_ID" && test -n "$OVERRIDE_API_HASH"
             effective_id="$OVERRIDE_API_ID"
             effective_hash="$OVERRIDE_API_HASH"
           fi
-          cd work/TBuild
-          ./source/Telegram/build/prepare/mac.sh silent
-          cd source/Telegram
-          ./configure.sh \
-            -D CMAKE_CONFIGURATION_TYPES=Release \
-            -D CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
-            -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
-            -D "TDESKTOP_API_ID=$effective_id" \
-            -D "TDESKTOP_API_HASH=$effective_hash"
-          cmake --build ../out --config Release --parallel
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          for index in "${!brands[@]}"; do
+            brand="${brands[$index]}"
+            if [ "$index" -gt 0 ]; then apply_brand "$brand" true; fi
+            metadata="$(metadata_for "$brand")"
+            product="$(jq -r .executable <<<"$metadata")"
+            cd "$source"
+            docker run --rm \
+              -u "$(id -u)" \
+              -w /usr/src/tdesktop \
+              -v "$PWD:/usr/src/tdesktop" \
+              -e CONFIG=Release \
+              crossgram-tdesktop-build \
+              /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
+              -Wno-error=policy \
+              -D CMAKE_CONFIGURATION_TYPES=Release \
+              -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+              -D "TDESKTOP_API_ID=$effective_id" \
+              -D "TDESKTOP_API_HASH=$effective_hash"
 
-      - name: Smoke test macOS
-        if: runner.os == 'macOS' && (steps.exists.outputs.value != 'true' || inputs.force)
-        env:
-          PRODUCT: ${{ steps.metadata.outputs.executable }}
-        run: |
-          product="$GITHUB_WORKSPACE/work/TBuild/source/out/Release/$PRODUCT.app/Contents/MacOS/$PRODUCT"
-          test -x "$product"
-          workdir="$(mktemp -d)"
-          trap 'rm -rf "$workdir"' EXIT
-          "$product" -quit -noupdate -workdir "$workdir" &
-          pid=$!
-          for _ in {1..60}; do
-            if ! kill -0 "$pid" 2>/dev/null; then
-              wait "$pid"
-              exit $?
-            fi
-            sleep 1
+            binary="$source/out/Release/$product"
+            test -x "$binary"
+            workdir="$(mktemp -d)"
+            timeout 60s xvfb-run -a "$binary" -quit -noupdate -workdir "$workdir"
+            rm -rf "$workdir"
+
+            package="$GITHUB_WORKSPACE/artifacts/package"
+            rm -rf "$package"
+            mkdir -p "$package"
+            cp "$binary" "$package/"
+            test ! -f "$source/out/Release/Updater" || cp "$source/out/Release/Updater" "$package/"
+            archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$VERSION.tar.xz"
+            tar -C "$package" -cJf "$archive" .
+            printf '%s\n' "$UPSTREAM_TAG" > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$VERSION.upstream-tag"
           done
-          kill "$pid" 2>/dev/null || true
-          wait "$pid" 2>/dev/null || true
-          echo "$product did not exit within 60 seconds" >&2
-          exit 1
 
-      - name: Package macOS
-        if: runner.os == 'macOS' && (steps.exists.outputs.value != 'true' || inputs.force)
-        env:
-          PRODUCT: ${{ steps.metadata.outputs.executable }}
-          TARGET: ${{ matrix.build.target }}
-          BRAND: ${{ matrix.build.brand }}
-          VERSION: ${{ steps.release.outputs.safe }}
-        run: |
-          output="work/TBuild/source/out/Release"
-          test -d "$output/$PRODUCT.app"
-          mkdir -p artifacts
-          ditto -c -k --sequesterRsrc --keepParent "$output/$PRODUCT.app" "artifacts/crossgram-$TARGET-$BRAND-macos-$VERSION.zip"
-
-      - name: Write release metadata
-        if: steps.exists.outputs.value != 'true' || inputs.force
-        shell: bash
+      - name: Build, smoke test, and package macOS brands
+        if: runner.os == 'macOS' && steps.plan.outputs.needed == 'true'
         env:
           TARGET: ${{ matrix.build.target }}
-          BRAND: ${{ matrix.build.brand }}
-          PLATFORM: ${{ matrix.platform }}
+          BRANDS: ${{ steps.plan.outputs.brands }}
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
-        run: printf '%s\n' "$UPSTREAM_TAG" > "artifacts/crossgram-$TARGET-$BRAND-$PLATFORM-$VERSION.upstream-tag"
+          OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
+          OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+        run: |
+          source="$GITHUB_WORKSPACE/work/TBuild/source"
+          patcher="$GITHUB_WORKSPACE/patcher"
+          brands=()
+          while IFS= read -r brand; do brands+=("$brand"); done < <(jq -r '.[]' <<<"$BRANDS")
+          branding_paths=(
+            Telegram/SourceFiles/core/version.h
+            Telegram/CMakeLists.txt
+            Telegram/Telegram.plist
+            Telegram/Resources/winrc
+            Telegram/Resources/art
+            Telegram/Telegram/Images.xcassets
+            Telegram/Resources/qrc/telegram/telegram.qrc
+            Telegram/SourceFiles/platform/linux/specific_linux.cpp
+            lib/xdg
+          )
+          apply_brand() {
+            local brand="$1"
+            local reset="$2"
+            if [ "$reset" = true ]; then
+              git -C "$source" checkout -- "${branding_paths[@]}"
+            fi
+            yarn --cwd "$patcher" apply --target "$TARGET" --brand "$brand" --root "$source"
+            git -C "$source" diff --check
+          }
+          metadata_for() {
+            yarn --cwd "$patcher" metadata --target "$TARGET" --brand "$1"
+          }
+
+          first_metadata="$(metadata_for "${brands[0]}")"
+          apply_brand "${brands[0]}" false
+          brew install automake libtool meson nasm ninja pkg-config
+          effective_id="$(jq -r .apiId <<<"$first_metadata")"
+          effective_hash="$(jq -r .apiHash <<<"$first_metadata")"
+          if [ -n "$OVERRIDE_API_ID$OVERRIDE_API_HASH" ]; then
+            test -n "$OVERRIDE_API_ID" && test -n "$OVERRIDE_API_HASH"
+            effective_id="$OVERRIDE_API_ID"
+            effective_hash="$OVERRIDE_API_HASH"
+          fi
+          cd "$GITHUB_WORKSPACE/work/TBuild"
+          ./source/Telegram/build/prepare/mac.sh silent
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          for index in "${!brands[@]}"; do
+            brand="${brands[$index]}"
+            if [ "$index" -gt 0 ]; then apply_brand "$brand" true; fi
+            metadata="$(metadata_for "$brand")"
+            executable="$(jq -r .executable <<<"$metadata")"
+            cd "$source/Telegram"
+            ./configure.sh \
+              -D CMAKE_CONFIGURATION_TYPES=Release \
+              -D CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
+              -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+              -D "TDESKTOP_API_ID=$effective_id" \
+              -D "TDESKTOP_API_HASH=$effective_hash"
+            cmake --build ../out --config Release --parallel
+
+            app="$source/out/Release/$executable.app"
+            product="$app/Contents/MacOS/$executable"
+            test -x "$product"
+            workdir="$(mktemp -d)"
+            "$product" -quit -noupdate -workdir "$workdir" &
+            pid=$!
+            exited=false
+            for _ in {1..60}; do
+              if ! kill -0 "$pid" 2>/dev/null; then
+                wait "$pid"
+                exited=true
+                break
+              fi
+              sleep 1
+            done
+            rm -rf "$workdir"
+            if [ "$exited" != true ]; then
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              echo "$product did not exit within 60 seconds" >&2
+              exit 1
+            fi
+
+            archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-macos-$VERSION.zip"
+            ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
+            printf '%s\n' "$UPSTREAM_TAG" > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-macos-$VERSION.upstream-tag"
+          done
 
       - name: Upload artifact
-        if: steps.exists.outputs.value != 'true' || inputs.force
+        if: always() && steps.plan.outputs.needed == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: crossgram-${{ matrix.build.target }}--${{ matrix.build.brand }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
+          name: crossgram-${{ matrix.build.target }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
           path: artifacts/crossgram-*
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14
 
   publish:
