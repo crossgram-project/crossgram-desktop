@@ -154,6 +154,11 @@ jobs:
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
           cd /d %GITHUB_WORKSPACE%\work\TBuild\source\Telegram
+          set "ATL_ROOT="
+          for /d %%D in ("%VCINSTALLDIR%Tools\MSVC\*") do if exist "%%~fD\atlmfc\include\atlbase.h" set "ATL_ROOT=%%~fD\atlmfc"
+          if not defined ATL_ROOT exit /b 1
+          set "INCLUDE=%ATL_ROOT%\include;%INCLUDE%"
+          set "LIB=%ATL_ROOT%\lib\x64;%LIB%"
           call build\prepare\win.bat silent qt6
           if errorlevel 1 exit /b %errorlevel%
           set EFFECTIVE_API_ID=%DEFAULT_API_ID%
