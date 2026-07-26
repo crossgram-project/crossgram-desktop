@@ -93,7 +93,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: crossgram/${{ matrix.build.target }}/${{ matrix.build.brand }}/${{ steps.release.outputs.tag }}
+          RELEASE_TAG: crossgram/${{ matrix.build.target }}/${{ steps.release.outputs.tag }}
           ASSET_PREFIX: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}-${{ matrix.platform }}-${{ steps.release.outputs.safe }}
         run: |
           assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
@@ -306,13 +306,13 @@ jobs:
         if: steps.exists.outputs.value != 'true' || inputs.force
         uses: actions/upload-artifact@v7
         with:
-          name: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}-${{ matrix.platform }}-${{ steps.release.outputs.safe }}
+          name: crossgram-${{ matrix.build.target }}--${{ matrix.build.brand }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
           path: artifacts/crossgram-*
           if-no-files-found: error
           retention-days: 14
 
   publish:
-    name: Publish ${{ matrix.build.target }} / ${{ matrix.build.brand }}
+    name: Publish ${{ matrix.build.target }}
     if: always()
     needs: build
     runs-on: ubuntu-latest
@@ -321,38 +321,19 @@ jobs:
       matrix:
         build:
           - target: tdesktop
-            brand: cross
             repository: telegramdesktop/tdesktop
           - target: tdesktop-x64
-            brand: cross
             repository: TDesktop-x64/tdesktop
           - target: ayugram
-            brand: cross
             repository: AyuGram/AyuGramDesktop
           - target: materialgram
-            brand: cross
             repository: kukuruzka165/materialgram
-          - target: tdesktop
-            brand: qq
-            repository: telegramdesktop/tdesktop
-          - target: tdesktop
-            brand: wechat
-            repository: telegramdesktop/tdesktop
-          - target: tdesktop
-            brand: wecom
-            repository: telegramdesktop/tdesktop
-          - target: tdesktop
-            brand: dingtalk
-            repository: telegramdesktop/tdesktop
-          - target: tdesktop
-            brand: discord
-            repository: telegramdesktop/tdesktop
     steps:
       - name: Download successful platform builds
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          pattern: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}-*
+          pattern: crossgram-${{ matrix.build.target }}--*
           path: artifacts
           merge-multiple: true
 
@@ -361,16 +342,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TARGET: ${{ matrix.build.target }}
-          BRAND: ${{ matrix.build.brand }}
           UPSTREAM: ${{ matrix.build.repository }}
         run: |
           if [ ! -d artifacts ]; then
-            echo "No new platform artifacts for this target and brand."
+            echo "No new variant artifacts for this target."
             exit 0
           fi
           mapfile -t metadata < <(find artifacts -maxdepth 1 -type f -name '*.upstream-tag' -print)
           if [ "${#metadata[@]}" -eq 0 ]; then
-            echo "No release metadata for this target and brand." >&2
+            echo "No release metadata for this target." >&2
             exit 1
           fi
           mapfile -t tags < <(cat "${metadata[@]}" | sed '/^$/d' | sort -u)
@@ -379,14 +359,14 @@ jobs:
             exit 1
           fi
           upstream_tag="${tags[0]}"
-          release_tag="crossgram/$TARGET/$BRAND/$upstream_tag"
-          release_name="$TARGET / $BRAND / $upstream_tag"
+          release_tag="crossgram/$TARGET/$upstream_tag"
+          release_name="$TARGET / $upstream_tag"
           mapfile -t files < <(find artifacts -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.xz' \) -print)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No new platform artifacts for this target and brand."
+            echo "No new variant artifacts for this target."
             exit 0
           fi
-          notes="Unofficial Crossgram build patched from $UPSTREAM release $upstream_tag. Platform artifacts are published independently. Themed builds are not affiliated with or endorsed by the owner of the referenced application name or icon."
+          notes="Unofficial Crossgram variants patched from $UPSTREAM release $upstream_tag. All available brands and platforms for this upstream version are published together. Themed builds are not affiliated with or endorsed by the owner of the referenced application name or icon."
           if gh release view "$release_tag" >/dev/null 2>&1; then
             gh release upload "$release_tag" "${files[@]}" --clobber
           else

@@ -22,7 +22,7 @@ describe("targets", () => {
     expect(() => targetById("unknown")).toThrow(/Unknown target/);
   });
 
-  it("keeps both workflow matrices in sync with the registry", async () => {
+  it("keeps workflow matrices in sync with the registry", async () => {
     const [check, release] = await Promise.all([
       readFile(resolve(repositoryRoot, ".github/workflows/check.yml"), "utf8"),
       readFile(resolve(repositoryRoot, ".github/workflows/release.yml"), "utf8"),
@@ -38,7 +38,11 @@ describe("targets", () => {
     const matrixBuilds = (workflow: string) =>
       [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brand: (\S+)$/gm)]
         .map((match) => `${match[1]}/${match[2]}`);
+    const publishTargets = (workflow: string) =>
+      [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+repository:/gm)]
+        .map((match) => match[1]);
     expect(matrixBuilds(check)).toEqual(expected);
-    expect(matrixBuilds(release)).toEqual([...expected, ...expected]);
+    expect(matrixBuilds(release)).toEqual(expected);
+    expect(publishTargets(release)).toEqual(targets.map(({ id }) => id));
   });
 });
