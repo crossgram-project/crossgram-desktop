@@ -55,7 +55,7 @@ describe("targets", () => {
       resolve(repositoryRoot, ".github/workflows/release.yml"),
       "utf8",
     );
-    expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15-large'");
+    expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15-intel'");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
@@ -64,5 +64,6 @@ describe("targets", () => {
     expect(release).toContain("CMAKE_INSTALL_DATADIR");
     expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
     expect(release).toContain("group: release-${{ matrix.build.target }}-${{ matrix.platform }}");
+    expect(release).toContain("configure_args+=('-GNinja Multi-Config')");
   });
 });

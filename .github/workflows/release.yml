@@ -39,7 +39,7 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.build.target }} / ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15-large' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15-intel' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     concurrency:
       group: release-${{ matrix.build.target }}-${{ matrix.platform }}
       cancel-in-progress: false
@@ -430,13 +430,17 @@ jobs:
           cd "$GITHUB_WORKSPACE/work/TBuild"
           ./source/Telegram/build/prepare/mac.sh silent
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          configure_args=()
+          if [ "$TARGET" = materialgram ]; then
+            configure_args+=('-GNinja Multi-Config')
+          fi
           for index in "${!brands[@]}"; do
             brand="${brands[$index]}"
             if [ "$index" -gt 0 ]; then apply_brand "$brand" true; fi
             metadata="$(metadata_for "$brand")"
             executable="$(jq -r .executable <<<"$metadata")"
             cd "$source/Telegram"
-            ./configure.sh \
+            ./configure.sh "${configure_args[@]}" \
               -D CMAKE_CONFIGURATION_TYPES=Release \
               -D CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
               -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
