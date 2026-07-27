@@ -39,7 +39,7 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.build.target }} / ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15-intel' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     concurrency:
       group: release-${{ matrix.build.target }}-${{ matrix.platform }}
       cancel-in-progress: false
@@ -420,6 +420,9 @@ jobs:
           first_metadata="$(metadata_for "${brands[0]}")"
           apply_brand "${brands[0]}" false
           brew install automake libtool meson nasm ninja pkg-config
+          if [ "$TARGET" = materialgram ] && [ "$(uname -m)" = arm64 ]; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
           effective_id="$(jq -r .apiId <<<"$first_metadata")"
           effective_hash="$(jq -r .apiHash <<<"$first_metadata")"
           if [ -n "$OVERRIDE_API_ID$OVERRIDE_API_HASH" ]; then

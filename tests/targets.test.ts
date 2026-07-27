@@ -55,7 +55,7 @@ describe("targets", () => {
       resolve(repositoryRoot, ".github/workflows/release.yml"),
       "utf8",
     );
-    expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15-intel'");
+    expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
@@ -66,5 +66,6 @@ describe("targets", () => {
     expect(release).toContain("group: release-${{ matrix.build.target }}-${{ matrix.platform }}");
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("'CMAKE_OSX_ARCHITECTURES=x86_64'");
+    expect(release).toContain("softwareupdate --install-rosetta --agree-to-license");
   });
 });
