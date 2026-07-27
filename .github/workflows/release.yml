@@ -40,6 +40,9 @@ jobs:
   build:
     name: ${{ matrix.build.target }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15-intel' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    concurrency:
+      group: release-${{ matrix.build.target }}-${{ matrix.platform }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:

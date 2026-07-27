@@ -63,5 +63,6 @@ describe("targets", () => {
     expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");
     expect(release).toContain("CMAKE_INSTALL_DATADIR");
     expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
+    expect(release).toContain("group: release-${{ matrix.build.target }}-${{ matrix.platform }}");
   });
 });
