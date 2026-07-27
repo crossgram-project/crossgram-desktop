@@ -28,7 +28,7 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.build.target }} / ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -135,7 +135,7 @@ jobs:
         if: runner.os == 'Windows' && steps.plan.outputs.needed == 'true'
         shell: pwsh
         env:
-          TARGET: ${{ matrix.build.target }}
+          CROSSGRAM_TARGET: ${{ matrix.build.target }}
           BRANDS: ${{ steps.plan.outputs.brands }}
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
@@ -160,7 +160,7 @@ jobs:
           function Get-BrandMetadata([string] $brand) {
             Push-Location $patcher
             try {
-              $output = @(& yarn metadata --target $env:TARGET --brand $brand)
+              $output = @(& yarn metadata --target $env:CROSSGRAM_TARGET --brand $brand)
               if ($LASTEXITCODE -ne 0) { throw "Could not read metadata for $brand" }
               $json = $output | Where-Object { $_ -match '^\{.*\}$' } | Select-Object -Last 1
               if (-not $json) { throw "Metadata for $brand did not contain JSON" }
@@ -176,7 +176,7 @@ jobs:
             }
             Push-Location $patcher
             try {
-              & yarn apply --target $env:TARGET --brand $brand --root $source
+              & yarn apply --target $env:CROSSGRAM_TARGET --brand $brand --root $source
               if ($LASTEXITCODE -ne 0) { throw "Could not apply brand $brand" }
             } finally {
               Pop-Location
@@ -239,9 +239,9 @@ jobs:
             $files = @($product)
             $updater = Join-Path $output 'Updater.exe'
             if (Test-Path -LiteralPath $updater) { $files += $updater }
-            $archive = "artifacts/crossgram-$env:TARGET-$brand-windows-$env:VERSION.zip"
+            $archive = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.zip"
             Compress-Archive -LiteralPath $files -DestinationPath $archive -Force
-            $tagFile = "artifacts/crossgram-$env:TARGET-$brand-windows-$env:VERSION.upstream-tag"
+            $tagFile = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.upstream-tag"
             [IO.File]::WriteAllText($tagFile, "$env:UPSTREAM_TAG`n", [Text.UTF8Encoding]::new($false))
           }
 

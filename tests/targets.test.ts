@@ -49,4 +49,14 @@ describe("targets", () => {
     expect(groupedMatrixBuilds(release).sort()).toEqual([...expected].sort());
     expect(publishTargets(release)).toEqual(targets.map(({ id }) => id));
   });
+
+  it("uses platform-safe release runners and environment names", async () => {
+    const release = await readFile(
+      resolve(repositoryRoot, ".github/workflows/release.yml"),
+      "utf8",
+    );
+    expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
+    expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
+    expect(release).not.toContain("$env:TARGET");
+  });
 });
