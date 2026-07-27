@@ -64,6 +64,7 @@ describe("targets", () => {
     expect(release).toContain("CMAKE_INSTALL_DATADIR");
     expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
     expect(release).toContain("group: release-${{ matrix.build.target }}-${{ matrix.platform }}");
-    expect(release).toContain("configure_args+=('-GNinja Multi-Config')");
+    expect(release).toContain("'-GNinja Multi-Config'");
+    expect(release).toContain("'CMAKE_OSX_ARCHITECTURES=x86_64'");
   });
 });

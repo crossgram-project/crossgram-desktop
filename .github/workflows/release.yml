@@ -432,7 +432,10 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
           configure_args=()
           if [ "$TARGET" = materialgram ]; then
-            configure_args+=('-GNinja Multi-Config')
+            configure_args+=(
+              '-GNinja Multi-Config'
+              '-D' 'CMAKE_OSX_ARCHITECTURES=x86_64'
+            )
           fi
           for index in "${!brands[@]}"; do
             brand="${brands[$index]}"
