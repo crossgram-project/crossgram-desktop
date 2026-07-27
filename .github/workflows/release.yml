@@ -16,6 +16,17 @@ on:
           - windows
           - linux
           - macos
+      target:
+        description: Target to build
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - tdesktop
+          - tdesktop-x64
+          - ayugram
+          - materialgram
       force:
         description: Rebuild releases that already exist
         required: false
@@ -28,7 +39,7 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.build.target }} / ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15-intel' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,8 +89,15 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           VERSION: ${{ steps.release.outputs.safe }}
           BRANDS: ${{ matrix.build.brands }}
+          TARGET_FILTER: ${{ inputs.target }}
+          MATRIX_TARGET: ${{ matrix.build.target }}
           FORCE: ${{ inputs.force }}
         run: |
+          if [ -n "$TARGET_FILTER" ] && [ "$TARGET_FILTER" != all ] && [ "$TARGET_FILTER" != "$MATRIX_TARGET" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo 'brands=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
           missing=()
           while IFS= read -r brand; do
@@ -324,6 +342,7 @@ jobs:
               crossgram-tdesktop-build \
               /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
               -Wno-error=policy \
+              -Wno-error=install-absolute-destination \
               -D CMAKE_CONFIGURATION_TYPES=Release \
               -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
               -D "TDESKTOP_API_ID=$effective_id" \

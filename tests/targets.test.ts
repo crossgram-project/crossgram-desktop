@@ -55,8 +55,10 @@ describe("targets", () => {
       resolve(repositoryRoot, ".github/workflows/release.yml"),
       "utf8",
     );
-    expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
+    expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15-intel'");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
+    expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
+    expect(release).toContain("-Wno-error=install-absolute-destination");
   });
 });
