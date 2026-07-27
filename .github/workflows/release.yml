@@ -234,7 +234,7 @@ jobs:
             $metadata = Get-BrandMetadata $brand
             Push-Location $telegram
             try {
-              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
+              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=' '-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
               if ($LASTEXITCODE -ne 0) { throw "Configure failed for $brand" }
               & cmake --build ..\out --config Release --parallel
               if ($LASTEXITCODE -ne 0) { throw "Build failed for $brand" }

@@ -62,5 +62,6 @@ describe("targets", () => {
     expect(release).toContain("-Wno-error=install-absolute-destination");
     expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");
     expect(release).toContain("CMAKE_INSTALL_DATADIR");
+    expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
   });
 });
