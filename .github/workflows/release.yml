@@ -311,6 +311,10 @@ jobs:
 
           first_metadata="$(metadata_for "${brands[0]}")"
           apply_brand "${brands[0]}" false
+          cppgir_cmake="$source/cmake/external/glib/cppgir/CMakeLists.txt"
+          if grep -q 'set(GI_IGNORE_FILE_INSTALL_DIR ${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME})' "$cppgir_cmake"; then
+            sed -i 's|${CMAKE_INSTALL_FULL_DATADIR}/${PROJECT_NAME}|${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}|' "$cppgir_cmake"
+          fi
           cd "$source/Telegram/build/docker/centos_env"
           python3 -m pip install --user poetry
           poetry install

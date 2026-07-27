@@ -60,5 +60,7 @@ describe("targets", () => {
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
     expect(release).toContain("-Wno-error=install-absolute-destination");
+    expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");
+    expect(release).toContain("CMAKE_INSTALL_DATADIR");
   });
 });
