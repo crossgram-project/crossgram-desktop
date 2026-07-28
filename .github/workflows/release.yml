@@ -467,6 +467,7 @@ jobs:
             configure_args+=(
               '-GNinja Multi-Config'
               '-D' 'CMAKE_OSX_ARCHITECTURES=x86_64'
+              '-D' 'CMAKE_NINJA_FORCE_RESPONSE_FILE=ON'
             )
           fi
           for index in "${!brands[@]}"; do
@@ -484,7 +485,8 @@ jobs:
             if [ "$TARGET" = materialgram ]; then
               build_log="$RUNNER_TEMP/materialgram-build.log"
               if ! cmake --build ../out --config Release "${build_parallel[@]}" >"$build_log" 2>&1; then
-                tail -n 250 "$build_log"
+                wc -c "$build_log"
+                tail -c 131072 "$build_log" | fold -w 2000
                 df -h /
                 exit 1
               fi
