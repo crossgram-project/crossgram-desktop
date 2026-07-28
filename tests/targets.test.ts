@@ -69,5 +69,6 @@ describe("targets", () => {
     expect(release).toContain("softwareupdate --install-rosetta --agree-to-license");
     expect(release).toContain("CMAKE_BUILD_PARALLEL_LEVEL=3");
     expect(release).toContain("'MAKE_THREADS_CNT': '-j3'");
+    expect(release).toContain('selected_xcode="$(cd "$(xcode-select -p)/../.." && pwd -P)"');
   });
 });

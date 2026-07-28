@@ -425,6 +425,21 @@ jobs:
             sudo softwareupdate --install-rosetta --agree-to-license
             export CMAKE_BUILD_PARALLEL_LEVEL=3 MAKEFLAGS=-j3
             build_parallel=(--parallel 3)
+            selected_xcode="$(cd "$(xcode-select -p)/../.." && pwd -P)"
+            for xcode in /Applications/Xcode*.app; do
+              [ -d "$xcode" ] || continue
+              candidate="$(cd "$xcode" && pwd -P)"
+              if [ "$candidate" != "$selected_xcode" ]; then
+                echo "Removing unused $candidate"
+                sudo rm -rf "$candidate"
+              fi
+            done
+            simulator_runtimes=/Library/Developer/CoreSimulator/Profiles/Runtimes
+            if [ -d "$simulator_runtimes" ]; then
+              sudo rm -rf "$simulator_runtimes"
+            fi
+            brew cleanup --prune=all
+            df -h /
             sed -i '' \
               "s/'MAKE_THREADS_CNT': '-j' + str(os.cpu_count())/'MAKE_THREADS_CNT': '-j3'/" \
               "$source/Telegram/build/prepare/prepare.py"
