@@ -27,6 +27,11 @@ on:
           - tdesktop-x64
           - ayugram
           - materialgram
+      brands:
+        description: Comma-separated brands to build, or all
+        required: false
+        default: all
+        type: string
       force:
         description: Rebuild releases that already exist
         required: false
@@ -94,6 +99,7 @@ jobs:
           BRANDS: ${{ matrix.build.brands }}
           TARGET_FILTER: ${{ inputs.target }}
           MATRIX_TARGET: ${{ matrix.build.target }}
+          BRAND_FILTER: ${{ inputs.brands }}
           FORCE: ${{ inputs.force }}
         run: |
           if [ -n "$TARGET_FILTER" ] && [ "$TARGET_FILTER" != all ] && [ "$TARGET_FILTER" != "$MATRIX_TARGET" ]; then
@@ -104,6 +110,12 @@ jobs:
           assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
           missing=()
           while IFS= read -r brand; do
+            if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
+              case ",$BRAND_FILTER," in
+                *",$brand,"*) ;;
+                *) continue ;;
+              esac
+            fi
             prefix="$ASSET_PREFIX-$brand-$PLATFORM-$VERSION"
             if [ "$FORCE" = true ] || ! grep -q "^$prefix\." <<<"$assets"; then
               missing+=("$brand")
