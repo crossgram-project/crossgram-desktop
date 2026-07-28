@@ -420,8 +420,14 @@ jobs:
           first_metadata="$(metadata_for "${brands[0]}")"
           apply_brand "${brands[0]}" false
           brew install automake libtool meson nasm ninja pkg-config
+          build_parallel=()
           if [ "$TARGET" = materialgram ] && [ "$(uname -m)" = arm64 ]; then
             sudo softwareupdate --install-rosetta --agree-to-license
+            export CMAKE_BUILD_PARALLEL_LEVEL=3 MAKEFLAGS=-j3
+            build_parallel=(--parallel 3)
+            sed -i '' \
+              "s/'MAKE_THREADS_CNT': '-j' + str(os.cpu_count())/'MAKE_THREADS_CNT': '-j3'/" \
+              "$source/Telegram/build/prepare/prepare.py"
           fi
           effective_id="$(jq -r .apiId <<<"$first_metadata")"
           effective_hash="$(jq -r .apiHash <<<"$first_metadata")"
@@ -452,7 +458,7 @@ jobs:
               -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
               -D "TDESKTOP_API_ID=$effective_id" \
               -D "TDESKTOP_API_HASH=$effective_hash"
-            cmake --build ../out --config Release --parallel
+            cmake --build ../out --config Release "${build_parallel[@]}"
 
             app="$source/out/Release/$executable.app"
             product="$app/Contents/MacOS/$executable"

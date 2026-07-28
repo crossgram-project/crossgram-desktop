@@ -67,5 +67,7 @@ describe("targets", () => {
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("'CMAKE_OSX_ARCHITECTURES=x86_64'");
     expect(release).toContain("softwareupdate --install-rosetta --agree-to-license");
+    expect(release).toContain("CMAKE_BUILD_PARALLEL_LEVEL=3");
+    expect(release).toContain("'MAKE_THREADS_CNT': '-j3'");
   });
 });
