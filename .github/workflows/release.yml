@@ -452,7 +452,15 @@ jobs:
             effective_hash="$OVERRIDE_API_HASH"
           fi
           cd "$GITHUB_WORKSPACE/work/TBuild"
-          ./source/Telegram/build/prepare/mac.sh silent
+          if [ "$TARGET" = materialgram ]; then
+            prepare_log="$RUNNER_TEMP/materialgram-prepare.log"
+            if ! ./source/Telegram/build/prepare/mac.sh silent >"$prepare_log" 2>&1; then
+              tail -n 250 "$prepare_log"
+              exit 1
+            fi
+          else
+            ./source/Telegram/build/prepare/mac.sh silent
+          fi
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
           configure_args=()
           if [ "$TARGET" = materialgram ]; then
@@ -473,7 +481,16 @@ jobs:
               -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
               -D "TDESKTOP_API_ID=$effective_id" \
               -D "TDESKTOP_API_HASH=$effective_hash"
-            cmake --build ../out --config Release "${build_parallel[@]}"
+            if [ "$TARGET" = materialgram ]; then
+              build_log="$RUNNER_TEMP/materialgram-build.log"
+              if ! cmake --build ../out --config Release "${build_parallel[@]}" >"$build_log" 2>&1; then
+                tail -n 250 "$build_log"
+                df -h /
+                exit 1
+              fi
+            else
+              cmake --build ../out --config Release "${build_parallel[@]}"
+            fi
 
             app="$source/out/Release/$executable.app"
             product="$app/Contents/MacOS/$executable"
