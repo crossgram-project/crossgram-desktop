@@ -467,6 +467,7 @@ jobs:
             configure_args+=(
               '-GNinja Multi-Config'
               '-D' 'CMAKE_OSX_ARCHITECTURES=x86_64'
+              '-D' 'DESKTOP_APP_DISABLE_SWIFT6=ON'
             )
           fi
           for index in "${!brands[@]}"; do
