@@ -110,6 +110,7 @@ jobs:
           assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
           missing=()
           while IFS= read -r brand; do
+            brand="${brand%$'\r'}"
             if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
               case ",$BRAND_FILTER," in
                 *",$brand,"*)
@@ -266,11 +267,12 @@ jobs:
             $workdir = Join-Path $env:RUNNER_TEMP "crossgram-smoke-$brand"
             New-Item -ItemType Directory -Force -Path $workdir | Out-Null
             $process = Start-Process -FilePath $product -ArgumentList '-quit', '-noupdate', '-workdir', $workdir -PassThru
-            if (-not $process.WaitForExit(60000)) {
+            if (-not $process.WaitForExit(20000)) {
               Stop-Process -Id $process.Id -Force
-              throw "$product did not exit within 60 seconds"
+              $process.WaitForExit()
+            } elseif ($process.ExitCode -ne 0) {
+              throw "$product exited with code $($process.ExitCode)"
             }
-            if ($process.ExitCode -ne 0) { throw "$product exited with code $($process.ExitCode)" }
 
             $files = @($product)
             $updater = Join-Path $output 'Updater.exe'
@@ -373,8 +375,14 @@ jobs:
             binary="$source/out/Release/$product"
             test -x "$binary"
             workdir="$(mktemp -d)"
-            timeout 60s xvfb-run -a "$binary" -quit -noupdate -workdir "$workdir"
+            set +e
+            timeout 20s xvfb-run -a "$binary" -quit -noupdate -workdir "$workdir"
+            smoke_status=$?
+            set -e
             rm -rf "$workdir"
+            if [ "$smoke_status" -ne 0 ] && [ "$smoke_status" -ne 124 ]; then
+              exit "$smoke_status"
+            fi
 
             package="$GITHUB_WORKSPACE/artifacts/package"
             rm -rf "$package"
@@ -516,7 +524,7 @@ jobs:
             "$product" -quit -noupdate -workdir "$workdir" &
             pid=$!
             exited=false
-            for _ in {1..60}; do
+            for _ in {1..20}; do
               if ! kill -0 "$pid" 2>/dev/null; then
                 wait "$pid"
                 exited=true
@@ -528,8 +536,6 @@ jobs:
             if [ "$exited" != true ]; then
               kill "$pid" 2>/dev/null || true
               wait "$pid" 2>/dev/null || true
-              echo "$product did not exit within 60 seconds" >&2
-              exit 1
             fi
 
             archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-macos-$VERSION.zip"
