@@ -11,6 +11,8 @@
     "build": "tsc -p tsconfig.json",
     "check": "yarn typecheck && yarn test",
     "apply": "tsx src/cli.ts patch",
+    "e2e:desktop": "node scripts/e2e/desktop.mjs",
+    "e2e:native-smoke": "node tests/native/e2e/smoke.mjs",
     "metadata": "tsx src/cli.ts metadata",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"

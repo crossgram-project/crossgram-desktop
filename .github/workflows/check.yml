@@ -122,3 +122,19 @@ jobs:
             executable="$(jq -r .executable <<<"$metadata")"
             grep -Fq "set(output_name \"$executable\")" "$GITHUB_WORKSPACE/source/Telegram/CMakeLists.txt"
           done
+
+      - name: Verify opt-in E2E feature
+        if: matrix.build.brand == 'cross'
+        working-directory: patcher
+        env:
+          TARGET: ${{ matrix.build.target }}
+          BRAND: ${{ matrix.build.brand }}
+        run: |
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" --feature e2e
+          git -C "$GITHUB_WORKSPACE/source" add --intent-to-add .
+          git -C "$GITHUB_WORKSPACE/source" diff --check
+          grep -Fq 'Crossgram::E2e::Start();' "$GITHUB_WORKSPACE/source/Telegram/SourceFiles/core/application.cpp"
+          before="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" --feature e2e
+          after="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
+          test "$before" = "$after"

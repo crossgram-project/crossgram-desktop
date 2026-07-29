@@ -48,6 +48,8 @@ describe("targets", () => {
     expect(matrixBuilds(check)).toEqual(expected);
     expect(groupedMatrixBuilds(release).sort()).toEqual([...expected].sort());
     expect(publishTargets(release)).toEqual(targets.map(({ id }) => id));
+    expect(check).toContain('--feature e2e');
+    expect(check).toContain('Verify opt-in E2E feature');
   });
 
   it("uses platform-safe release runners and environment names", async () => {
