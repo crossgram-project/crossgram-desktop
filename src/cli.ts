@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { patchBranding } from "../features/branding/patch.js";
 import { patchServerSwitch } from "../features/server-switch/patch.js";
+import { patchDirectDownload } from "../features/direct-download/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
 import { targetById } from "./targets.js";
 
@@ -57,6 +58,11 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       root: values.root!,
       target,
       featureRoot: resolve(repositoryRoot, "features/server-switch"),
+    });
+    await patchDirectDownload({
+      root: values.root!,
+      target,
+      featureRoot: resolve(repositoryRoot, "features/direct-download"),
     });
     await patchBranding({
       root: values.root!,
