@@ -4,9 +4,11 @@ import { parseArgs } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { patchBranding } from "../features/branding/patch.js";
+import { patchE2e } from "../features/e2e/patch.js";
 import { patchServerSwitch } from "../features/server-switch/patch.js";
 import { patchDirectDownload } from "../features/direct-download/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
+import { resolveFeatures } from "./features.js";
 import { targetById } from "./targets.js";
 
 const { positionals, values } = parseArgs({
@@ -15,19 +17,21 @@ const { positionals, values } = parseArgs({
     root: { type: "string", short: "r" },
     target: { type: "string", short: "t" },
     brand: { type: "string", short: "b", default: "cross" },
+    feature: { type: "string", multiple: true, default: [] },
     "github-output": { type: "boolean", default: false },
   },
 });
 
 const command = positionals[0];
 if (!values.target || (command === "patch" && !values.root) || !["patch", "metadata"].includes(command ?? "")) {
-  console.error("Usage: yarn apply --target <id> --brand <id> --root <tdesktop checkout>");
+  console.error("Usage: yarn apply --target <id> --brand <id> --root <tdesktop checkout> [--feature e2e]");
   console.error("       yarn metadata --target <id> --brand <id>");
   process.exitCode = 2;
 } else {
   const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const target = targetById(values.target);
   const brand = resolveBrand(target, brandById(values.brand ?? "cross"));
+  const features = resolveFeatures(values.feature ?? []);
   if (command === "metadata") {
     const metadata = {
       target: target.id,
@@ -70,6 +74,14 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       brand,
       featureRoot: resolve(repositoryRoot, "features/branding"),
     });
-    console.log(`Patched ${values.target}/${brand.id} at ${resolve(values.root!)}.`);
+    if (features.has("e2e")) {
+      await patchE2e({
+        root: values.root!,
+        target,
+        featureRoot: resolve(repositoryRoot, "features/e2e"),
+      });
+    }
+    const enabled = features.size ? ` with ${[...features].join(", ")}` : "";
+    console.log(`Patched ${values.target}/${brand.id}${enabled} at ${resolve(values.root!)}.`);
   }
 }

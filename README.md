@@ -1,6 +1,6 @@
 # Crossgram Desktop patcher
 
-This repository applies opt-in features to Telegram Desktop forks without using Git patch files. `server-switch` adds a per-account MTProto server selector to the sign-in UI, while `branding` gives generated applications independent names and platform identifiers.
+This repository applies opt-in features to Telegram Desktop forks without using Git patch files. `server-switch` adds a per-account MTProto server selector to the sign-in UI, while `branding` gives generated applications independent names and platform identifiers. The separately enabled `e2e` feature exposes the Qt accessibility tree to authenticated local test drivers.
 
 For `bridge-media:` files, patched clients first call Crossgram's
 `crossgram.getFileUrl` RPC and download byte ranges directly over HTTP. Any RPC,
@@ -27,9 +27,14 @@ yarn install --immutable
 yarn apply --target tdesktop --brand cross --root /path/to/tdesktop
 ```
 
+Normal builds do not contain the semantic automation endpoint. Add
+`--feature e2e` only for a controlled E2E build; see
+[`features/e2e/README.md`](features/e2e/README.md) for the runtime protocol and
+driver examples.
+
 Target ids are `tdesktop`, `tdesktop-x64`, `ayugram`, and `materialgram`. Brand ids are `cross`, `qq`, `wechat`, `wecom`, `dingtalk`, and `discord`; `cross` is the default. Applying the patch repeatedly is supported and produces byte-identical output.
 
-The patcher performs unique, structural edits around C++ function bodies, declarations, includes, CMake metadata, and desktop integration files. A missing or ambiguous anchor is a hard failure. Large injected implementations and their integration logic are isolated under [`features/server-switch`](features/server-switch) and [`features/branding`](features/branding).
+The patcher performs unique, structural edits around C++ function bodies, declarations, includes, CMake metadata, and desktop integration files. A missing or ambiguous anchor is a hard failure. Large injected implementations and their integration logic are isolated under [`features/server-switch`](features/server-switch), [`features/branding`](features/branding), and [`features/e2e`](features/e2e).
 
 ## Build branding
 
