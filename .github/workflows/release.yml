@@ -112,7 +112,10 @@ jobs:
           while IFS= read -r brand; do
             if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
               case ",$BRAND_FILTER," in
-                *",$brand,"*) ;;
+                *",$brand,"*)
+                  missing+=("$brand")
+                  continue
+                  ;;
                 *) continue ;;
               esac
             fi
