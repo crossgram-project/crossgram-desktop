@@ -7,6 +7,7 @@ import { patchBranding } from "../features/branding/patch.js";
 import { patchE2e } from "../features/e2e/patch.js";
 import { patchServerSwitch } from "../features/server-switch/patch.js";
 import { patchDirectDownload } from "../features/direct-download/patch.js";
+import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
 import { resolveFeatures } from "./features.js";
 import { targetById } from "./targets.js";
@@ -58,6 +59,10 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       console.log(JSON.stringify(metadata));
     }
   } else {
+    await patchUpstreamCompatibility({
+      root: values.root!,
+      target,
+    });
     await patchServerSwitch({
       root: values.root!,
       target,

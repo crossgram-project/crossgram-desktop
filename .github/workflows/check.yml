@@ -124,6 +124,15 @@ jobs:
           done
           git -C "$GITHUB_WORKSPACE/source" checkout -- "${branding_paths[@]}"
 
+      - name: Verify 64Gram Windows CBOR symbol isolation
+        if: matrix.build.target == 'tdesktop-x64'
+        run: |
+          cmake_file="$GITHUB_WORKSPACE/source/Telegram/cmake/lib_fido2.cmake"
+          grep -Fq 'cbor_encode_uint=crossgram_libcbor_encode_uint' "$cmake_file"
+          grep -Fq 'cbor_encode_tag=crossgram_libcbor_encode_tag' "$cmake_file"
+          grep -Fq 'cbor_encode_null=crossgram_libcbor_encode_null' "$cmake_file"
+          grep -Fq 'cbor_encode_double=crossgram_libcbor_encode_double' "$cmake_file"
+
       - name: Verify opt-in E2E feature
         if: matrix.build.brand == 'cross'
         working-directory: patcher

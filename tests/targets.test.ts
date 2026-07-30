@@ -68,6 +68,8 @@ describe("targets", () => {
     expect(release).not.toContain('release_tag="crossgram/$TARGET/');
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
+    expect(check).toContain('Verify 64Gram Windows CBOR symbol isolation');
+    expect(check).toContain('cbor_encode_double=crossgram_libcbor_encode_double');
   });
 
   it("uses platform-safe release runners and environment names", async () => {
