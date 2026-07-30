@@ -66,7 +66,7 @@ describe("targets", () => {
     expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
     expect(release).toContain("group: crossgram-desktop-upstream-release");
     expect(release).toContain("'-GNinja Multi-Config'");
-    expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
+    expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
     expect(release).toContain("-DNDEBUG -DQT_NO_DEBUG");
     expect(release).toContain("objcopy --only-keep-debug");
     expect(release).toContain('strip -S -x "$product"');
