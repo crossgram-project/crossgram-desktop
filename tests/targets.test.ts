@@ -42,12 +42,11 @@ describe("targets", () => {
       [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brands: '([^']+)'$/gm)]
         .flatMap((match) => (JSON.parse(match[2]!) as string[])
           .map((brand) => `${match[1]}/${brand}`));
-    const publishTargets = (workflow: string) =>
-      [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+repository:/gm)]
-        .map((match) => match[1]);
     expect(matrixBuilds(check)).toEqual(expected);
     expect(groupedMatrixBuilds(release).sort()).toEqual([...expected].sort());
-    expect(publishTargets(release)).toEqual(targets.map(({ id }) => id));
+    expect(release).toContain("name: Publish one unified release");
+    expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
+    expect(release).not.toContain('release_tag="crossgram/$TARGET/');
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
   });
@@ -65,8 +64,14 @@ describe("targets", () => {
     expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");
     expect(release).toContain("CMAKE_INSTALL_DATADIR");
     expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
-    expect(release).toContain("group: release-${{ matrix.build.target }}-${{ matrix.platform }}");
+    expect(release).toContain("group: crossgram-desktop-upstream-release");
     expect(release).toContain("'-GNinja Multi-Config'");
+    expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
+    expect(release).toContain("-DNDEBUG -DQT_NO_DEBUG");
+    expect(release).toContain("objcopy --only-keep-debug");
+    expect(release).toContain('strip -S -x "$product"');
+    expect(release).toContain(".symbols.zip");
+    expect(release).toContain(".symbols.tar.xz");
     expect(release).toContain("'CMAKE_OSX_ARCHITECTURES=x86_64'");
     expect(release).toContain("softwareupdate --install-rosetta --agree-to-license");
     expect(release).toContain("CMAKE_BUILD_PARALLEL_LEVEL=3");

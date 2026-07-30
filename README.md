@@ -91,14 +91,16 @@ tdata/<account-hash>/server-switch.json
 
 [`check.yml`](.github/workflows/check.yml) resolves and patches all four latest upstream releases plus the five Telegram Desktop themes in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
 
-[`release.yml`](.github/workflows/release.yml) builds 9 target/brand combinations × 3 platforms for Windows, Linux, and macOS. Successful artifacts are grouped and published per target/brand; one job's failure does not block the other releases. A platform asset that already exists is skipped, while a previously failed or missing platform is retried on the next run. A manual run can set `force` to rebuild every asset.
+[`release.yml`](.github/workflows/release.yml) builds 9 target/brand combinations × 3 platforms for Windows, Linux, and macOS. Each workflow run publishes every successful target, brand, and platform into one unified `Crossgram Desktop #<run-number>` release, matching the Android release model. One job's failure does not prevent the other successful builds from being published.
+
+User archives contain stripped production binaries built with `NDEBUG` and `QT_NO_DEBUG`. Debug information is kept out of those archives and published as separate `*.symbols.*` assets: PDB files on Windows, split debug files on Linux, and dSYM bundles on macOS.
 
 CI defaults to the production API ID/hash recovered from each upstream's official release binary: Telegram Desktop and AyuGram use Telegram Desktop's credentials, while 64Gram and Materialgram keep their own. Repository secrets `TDESKTOP_API_ID` and `TDESKTOP_API_HASH` may override both values together. Release builds never fall back to `TDESKTOP_API_TEST=ON`.
 
 Release tags use this form:
 
 ```text
-crossgram/<target-id>/<brand-id>/<upstream-release-tag>
+crossgram-<workflow-run-number>
 ```
 
 ## Development checks

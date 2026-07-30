@@ -1,4 +1,4 @@
-name: Build latest releases
+name: Build and publish Crossgram Desktop
 
 on:
   schedule:
@@ -32,22 +32,18 @@ on:
         required: false
         default: all
         type: string
-      force:
-        description: Rebuild releases that already exist
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
+
+concurrency:
+  group: crossgram-desktop-upstream-release
+  cancel-in-progress: false
 
 jobs:
   build:
     name: ${{ matrix.build.target }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
-    concurrency:
-      group: release-${{ matrix.build.target }}-${{ matrix.platform }}
-      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -87,46 +83,36 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "safe=$safe" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve brands to build
+      - name: Resolve variants to build
         id: plan
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: crossgram/${{ matrix.build.target }}/${{ steps.release.outputs.tag }}
-          ASSET_PREFIX: crossgram-${{ matrix.build.target }}
-          PLATFORM: ${{ matrix.platform }}
-          VERSION: ${{ steps.release.outputs.safe }}
           BRANDS: ${{ matrix.build.brands }}
           TARGET_FILTER: ${{ inputs.target }}
           MATRIX_TARGET: ${{ matrix.build.target }}
           BRAND_FILTER: ${{ inputs.brands }}
-          FORCE: ${{ inputs.force }}
         run: |
           if [ -n "$TARGET_FILTER" ] && [ "$TARGET_FILTER" != all ] && [ "$TARGET_FILTER" != "$MATRIX_TARGET" ]; then
             echo "needed=false" >> "$GITHUB_OUTPUT"
             echo 'brands=[]' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
-          missing=()
+          selected=()
           while IFS= read -r brand; do
             brand="${brand%$'\r'}"
             if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
               case ",$BRAND_FILTER," in
                 *",$brand,"*)
-                  missing+=("$brand")
+                  selected+=("$brand")
                   continue
                   ;;
                 *) continue ;;
               esac
             fi
-            prefix="$ASSET_PREFIX-$brand-$PLATFORM-$VERSION"
-            if [ "$FORCE" = true ] || ! grep -q "^$prefix\." <<<"$assets"; then
-              missing+=("$brand")
-            fi
+            selected+=("$brand")
           done < <(jq -r '.[]' <<<"$BRANDS")
-          if [ "${#missing[@]}" -gt 0 ]; then
-            brands="$(printf '%s\n' "${missing[@]}" | jq -R . | jq -sc .)"
+          if [ "${#selected[@]}" -gt 0 ]; then
+            brands="$(printf '%s\n' "${selected[@]}" | jq -R . | jq -sc .)"
             echo "needed=true" >> "$GITHUB_OUTPUT"
             echo "brands=$brands" >> "$GITHUB_OUTPUT"
           else
@@ -176,6 +162,7 @@ jobs:
           BRANDS: ${{ steps.plan.outputs.brands }}
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+          UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -253,7 +240,7 @@ jobs:
             $metadata = Get-BrandMetadata $brand
             Push-Location $telegram
             try {
-              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=' '-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
+              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase' '-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
               if ($LASTEXITCODE -ne 0) { throw "Configure failed for $brand" }
               & cmake --build ..\out --config Release --parallel
               if ($LASTEXITCODE -ne 0) { throw "Build failed for $brand" }
@@ -279,9 +266,29 @@ jobs:
             if (Test-Path -LiteralPath $updater) { $files += $updater }
             $archive = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.zip"
             Compress-Archive -LiteralPath $files -DestinationPath $archive -Force
-            $tagFile = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.upstream-tag"
-            [IO.File]::WriteAllText($tagFile, "$env:UPSTREAM_TAG`n", [Text.UTF8Encoding]::new($false))
+
+            $symbolFiles = @()
+            $productPdb = [IO.Path]::ChangeExtension($product, '.pdb')
+            if (-not (Test-Path -LiteralPath $productPdb)) {
+              $productPdb = Get-ChildItem -LiteralPath $output -Filter '*.pdb' -File |
+                Where-Object { $_.Name -ne 'Updater.pdb' } |
+                Sort-Object LastWriteTimeUtc -Descending |
+                Select-Object -First 1 -ExpandProperty FullName
+            }
+            if (-not $productPdb) { throw "Missing external symbols for $product" }
+            $symbolFiles += $productPdb
+            $updaterPdb = Join-Path $output 'Updater.pdb'
+            if (Test-Path -LiteralPath $updaterPdb) { $symbolFiles += $updaterPdb }
+            $symbolsArchive = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.symbols.zip"
+            Compress-Archive -LiteralPath $symbolFiles -DestinationPath $symbolsArchive -Force
           }
+          $releaseMetadata = [ordered]@{
+            target = $env:CROSSGRAM_TARGET
+            repository = $env:UPSTREAM_REPOSITORY
+            tag = $env:UPSTREAM_TAG
+          } | ConvertTo-Json -Compress
+          $metadataFile = "artifacts/crossgram-$env:CROSSGRAM_TARGET-windows-$env:VERSION.upstream.json"
+          [IO.File]::WriteAllText($metadataFile, "$releaseMetadata`n", [Text.UTF8Encoding]::new($false))
 
       - name: Build, smoke test, and package Linux brands
         if: runner.os == 'Linux' && steps.plan.outputs.needed == 'true'
@@ -290,6 +297,7 @@ jobs:
           BRANDS: ${{ steps.plan.outputs.brands }}
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+          UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -368,6 +376,8 @@ jobs:
               -Wno-error=policy \
               -Wno-error=install-absolute-destination \
               -D CMAKE_CONFIGURATION_TYPES=Release \
+              -D "CMAKE_C_FLAGS_RELEASE=-O3 -DNDEBUG -DQT_NO_DEBUG" \
+              -D "CMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -DQT_NO_DEBUG" \
               -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
               -D "TDESKTOP_API_ID=$effective_id" \
               -D "TDESKTOP_API_HASH=$effective_hash"
@@ -384,15 +394,37 @@ jobs:
               exit "$smoke_status"
             fi
 
+            symbols="$GITHUB_WORKSPACE/artifacts/symbols-$brand"
+            rm -rf "$symbols"
+            mkdir -p "$symbols"
+            objcopy --only-keep-debug "$binary" "$symbols/$product.debug"
+            strip --strip-all "$binary"
+            if readelf --sections "$binary" | grep -Eq '\.debug_|\.symtab'; then
+              echo "Unstripped debug or symbol sections remain in $binary" >&2
+              exit 1
+            fi
+            updater="$source/out/Release/Updater"
+            if [ -f "$updater" ]; then
+              objcopy --only-keep-debug "$updater" "$symbols/Updater.debug"
+              strip --strip-all "$updater"
+            fi
+
             package="$GITHUB_WORKSPACE/artifacts/package"
             rm -rf "$package"
             mkdir -p "$package"
             cp "$binary" "$package/"
-            test ! -f "$source/out/Release/Updater" || cp "$source/out/Release/Updater" "$package/"
+            test ! -f "$updater" || cp "$updater" "$package/"
             archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$VERSION.tar.xz"
             tar -C "$package" -cJf "$archive" .
-            printf '%s\n' "$UPSTREAM_TAG" > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$VERSION.upstream-tag"
+            symbols_archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$VERSION.symbols.tar.xz"
+            tar -C "$symbols" -cJf "$symbols_archive" .
           done
+          jq -cn \
+            --arg target "$TARGET" \
+            --arg repository "$UPSTREAM_REPOSITORY" \
+            --arg tag "$UPSTREAM_TAG" \
+            '{ target: $target, repository: $repository, tag: $tag }' \
+            > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-linux-$VERSION.upstream.json"
 
       - name: Build, smoke test, and package macOS brands
         if: runner.os == 'macOS' && steps.plan.outputs.needed == 'true'
@@ -401,6 +433,7 @@ jobs:
           BRANDS: ${{ steps.plan.outputs.brands }}
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+          UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -501,6 +534,8 @@ jobs:
             cd "$source/Telegram"
             ./configure.sh "${configure_args[@]}" \
               -D CMAKE_CONFIGURATION_TYPES=Release \
+              -D "CMAKE_C_FLAGS_RELEASE=-O3 -DNDEBUG -DQT_NO_DEBUG" \
+              -D "CMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -DQT_NO_DEBUG" \
               -D CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO \
               -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
               -D "TDESKTOP_API_ID=$effective_id" \
@@ -538,10 +573,28 @@ jobs:
               wait "$pid" 2>/dev/null || true
             fi
 
+            symbols="$GITHUB_WORKSPACE/artifacts/symbols-$brand"
+            rm -rf "$symbols"
+            mkdir -p "$symbols"
+            generated_dsym="$source/out/Release/$executable.app.dSYM"
+            if [ -d "$generated_dsym" ]; then
+              cp -R "$generated_dsym" "$symbols/"
+            else
+              dsymutil "$product" -o "$symbols/$executable.dSYM"
+            fi
+            strip -S -x "$product"
+
             archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-macos-$VERSION.zip"
             ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
-            printf '%s\n' "$UPSTREAM_TAG" > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-macos-$VERSION.upstream-tag"
+            symbols_archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-macos-$VERSION.symbols.zip"
+            ditto -c -k --sequesterRsrc "$symbols" "$symbols_archive"
           done
+          jq -cn \
+            --arg target "$TARGET" \
+            --arg repository "$UPSTREAM_REPOSITORY" \
+            --arg tag "$UPSTREAM_TAG" \
+            '{ target: $target, repository: $repository, tag: $tag }' \
+            > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-macos-$VERSION.upstream.json"
 
       - name: Upload artifact
         if: always() && steps.plan.outputs.needed == 'true'
@@ -553,63 +606,61 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Publish ${{ matrix.build.target }}
+    name: Publish one unified release
     if: always()
     needs: build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        build:
-          - target: tdesktop
-            repository: telegramdesktop/tdesktop
-          - target: tdesktop-x64
-            repository: TDesktop-x64/tdesktop
-          - target: ayugram
-            repository: AyuGram/AyuGramDesktop
-          - target: materialgram
-            repository: kukuruzka165/materialgram
     steps:
       - name: Download successful platform builds
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          pattern: crossgram-${{ matrix.build.target }}--*
+          pattern: crossgram-*
           path: artifacts
           merge-multiple: true
 
-      - name: Publish release
+      - name: Publish all successful targets, brands, and platforms
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TARGET: ${{ matrix.build.target }}
-          UPSTREAM: ${{ matrix.build.repository }}
         run: |
           if [ ! -d artifacts ]; then
-            echo "No new variant artifacts for this target."
+            echo "No successful artifacts; skipping release."
             exit 0
           fi
-          mapfile -t metadata < <(find artifacts -maxdepth 1 -type f -name '*.upstream-tag' -print)
+          mapfile -t metadata < <(find artifacts -maxdepth 1 -type f -name '*.upstream.json' -print | sort)
           if [ "${#metadata[@]}" -eq 0 ]; then
-            echo "No release metadata for this target." >&2
+            echo "No release metadata was downloaded." >&2
             exit 1
           fi
-          mapfile -t tags < <(cat "${metadata[@]}" | sed '/^$/d' | sort -u)
-          if [ "${#tags[@]}" -ne 1 ]; then
-            printf 'Expected one upstream tag, found: %s\n' "${tags[*]}" >&2
+          if jq -s -e 'group_by(.target) | any(.[]; (map(.tag) | unique | length) != 1 or (map(.repository) | unique | length) != 1)' "${metadata[@]}" >/dev/null; then
+            echo "Conflicting upstream metadata for the same target." >&2
             exit 1
           fi
-          upstream_tag="${tags[0]}"
-          release_tag="crossgram/$TARGET/$upstream_tag"
-          release_name="$TARGET / $upstream_tag"
           mapfile -t files < <(find artifacts -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.xz' \) -print)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No new variant artifacts for this target."
+            echo "No successful packages or symbol archives; skipping release."
             exit 0
           fi
-          notes="Unofficial Crossgram variants patched from $UPSTREAM release $upstream_tag. All available brands and platforms for this upstream version are published together. Themed builds are not affiliated with or endorsed by the owner of the referenced application name or icon."
+
+          release_tag="crossgram-${GITHUB_RUN_NUMBER}"
+          release_name="Crossgram Desktop #${GITHUB_RUN_NUMBER}"
+          {
+            echo "Unified Crossgram Desktop build from workflow run ${GITHUB_RUN_NUMBER}."
+            echo
+            echo "Included upstream revisions:"
+            jq -s -r 'unique_by(.target) | sort_by(.target)[] | "- \(.target): `\(.tag)` from \(.repository)"' "${metadata[@]}"
+            echo
+            echo "All successful upstream, platform, standard, and branded builds are attached to this one release. User packages contain stripped production binaries built with NDEBUG and QT_NO_DEBUG. Matching Windows PDB, Linux debug files, and macOS dSYM bundles are published separately as *.symbols.* assets."
+            echo
+            echo "Themed builds are unofficial and are not affiliated with or endorsed by the owner of the referenced application name or icon."
+          } > release-notes.md
+
           if gh release view "$release_tag" >/dev/null 2>&1; then
             gh release upload "$release_tag" "${files[@]}" --clobber
           else
-            gh release create "$release_tag" "${files[@]}" --title "$release_name" --notes "$notes"
+            gh release create "$release_tag" "${files[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "$release_name" \
+              --notes-file release-notes.md
           fi
