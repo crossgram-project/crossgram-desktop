@@ -265,7 +265,10 @@ jobs:
             $updater = Join-Path $output 'Updater.exe'
             if (Test-Path -LiteralPath $updater) { $files += $updater }
             $archive = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.zip"
-            Compress-Archive -LiteralPath $files -DestinationPath $archive -Force
+            $archivePath = [IO.Path]::GetFullPath($archive)
+            $packageNames = @($files | ForEach-Object { [IO.Path]::GetFileName($_) })
+            & tar.exe -a -cf $archivePath -C $output @packageNames
+            if ($LASTEXITCODE -ne 0) { throw "Could not create $archive" }
 
             $symbolFiles = @()
             $productPdb = [IO.Path]::ChangeExtension($product, '.pdb')
@@ -280,7 +283,10 @@ jobs:
             $updaterPdb = Join-Path $output 'Updater.pdb'
             if (Test-Path -LiteralPath $updaterPdb) { $symbolFiles += $updaterPdb }
             $symbolsArchive = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.symbols.zip"
-            Compress-Archive -LiteralPath $symbolFiles -DestinationPath $symbolsArchive -Force
+            $symbolsArchivePath = [IO.Path]::GetFullPath($symbolsArchive)
+            $symbolNames = @($symbolFiles | ForEach-Object { [IO.Path]::GetFileName($_) })
+            & tar.exe -a -cf $symbolsArchivePath -C $output @symbolNames
+            if ($LASTEXITCODE -ne 0) { throw "Could not create $symbolsArchive" }
           }
           $releaseMetadata = [ordered]@{
             target = $env:CROSSGRAM_TARGET
@@ -637,9 +643,22 @@ jobs:
             echo "Conflicting upstream metadata for the same target." >&2
             exit 1
           fi
-          mapfile -t files < <(find artifacts -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.xz' \) -print)
+          files=()
+          while IFS= read -r package; do
+            case "$package" in
+              *.symbols.zip|*.symbols.tar.xz) continue ;;
+              *.zip) symbols="${package%.zip}.symbols.zip" ;;
+              *.tar.xz) symbols="${package%.tar.xz}.symbols.tar.xz" ;;
+              *) continue ;;
+            esac
+            if [ -f "$symbols" ]; then
+              files+=("$package" "$symbols")
+            else
+              echo "Skipping incomplete package without matching symbols: $package" >&2
+            fi
+          done < <(find artifacts -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.xz' \) -print | sort)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No successful packages or symbol archives; skipping release."
+            echo "No complete package and symbol pairs; skipping release."
             exit 0
           fi
 

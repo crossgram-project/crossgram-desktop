@@ -72,10 +72,14 @@ describe("targets", () => {
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
     expect(release).toContain("-DNDEBUG -DQT_NO_DEBUG");
+    expect(release).toContain("& tar.exe -a -cf $archivePath");
+    expect(release).toContain("& tar.exe -a -cf $symbolsArchivePath");
+    expect(release).not.toContain("Compress-Archive");
     expect(release).toContain("objcopy --only-keep-debug");
     expect(release).toContain('strip -S -x "$product"');
     expect(release).toContain(".symbols.zip");
     expect(release).toContain(".symbols.tar.xz");
+    expect(release).toContain("Skipping incomplete package without matching symbols");
     expect(release).toContain("'CMAKE_OSX_ARCHITECTURES=x86_64'");
     expect(release).toContain("softwareupdate --install-rosetta --agree-to-license");
     expect(release).toContain("CMAKE_BUILD_PARALLEL_LEVEL=3");
