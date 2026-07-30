@@ -65,6 +65,9 @@ describe("targets", () => {
     expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");
     expect(release).toContain("CMAKE_INSTALL_DATADIR");
     expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
+    expect(release).toContain(
+      "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL /OPT:REF /OPT:ICF",
+    );
     expect(release).toContain("group: crossgram-desktop-upstream-release");
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
