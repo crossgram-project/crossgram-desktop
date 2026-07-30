@@ -46,6 +46,7 @@ describe("targets", () => {
     expect(groupedMatrixBuilds(release).sort()).toEqual([...expected].sort());
     expect(release).toContain("name: Publish one unified release");
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
+    expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");
     expect(release).not.toContain('release_tag="crossgram/$TARGET/');
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');

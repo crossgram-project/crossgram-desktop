@@ -621,7 +621,7 @@ jobs:
 
       - name: Publish all successful targets, brands, and platforms
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.CROSSGRAM_RELEASE_TOKEN || github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           if [ ! -d artifacts ]; then
