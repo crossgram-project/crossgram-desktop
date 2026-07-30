@@ -122,6 +122,7 @@ jobs:
             executable="$(jq -r .executable <<<"$metadata")"
             grep -Fq "set(output_name \"$executable\")" "$GITHUB_WORKSPACE/source/Telegram/CMakeLists.txt"
           done
+          git -C "$GITHUB_WORKSPACE/source" checkout -- "${branding_paths[@]}"
 
       - name: Verify opt-in E2E feature
         if: matrix.build.brand == 'cross'
