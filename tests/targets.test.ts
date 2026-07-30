@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { targetById, targets } from "../src/targets.js";
+import {
+  CROSSGRAM_TELEGRAM_API_HASH,
+  CROSSGRAM_TELEGRAM_API_ID,
+  targetById,
+  targets,
+} from "../src/targets.js";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -20,6 +25,19 @@ describe("targets", () => {
 
   it("rejects unknown target ids", () => {
     expect(() => targetById("unknown")).toThrow(/Unknown target/);
+  });
+
+  it("uses the Crossgram Telegram API identity for every client target", () => {
+    expect(CROSSGRAM_TELEGRAM_API_ID).toBe(24862414);
+    expect(CROSSGRAM_TELEGRAM_API_HASH).toBe(
+      "1745670d4621f50d831db069ecc40285",
+    );
+    expect(targets.map(({ apiId }) => apiId)).toEqual(
+      targets.map(() => CROSSGRAM_TELEGRAM_API_ID),
+    );
+    expect(targets.map(({ apiHash }) => apiHash)).toEqual(
+      targets.map(() => CROSSGRAM_TELEGRAM_API_HASH),
+    );
   });
 
   it("keeps workflow matrices in sync with the registry", async () => {
@@ -69,6 +87,8 @@ describe("targets", () => {
       "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL /OPT:REF /OPT:ICF",
     );
     expect(release).toContain("group: crossgram-desktop-upstream-release");
+    expect(release).toContain("Both API overrides are required");
+    expect(release).toContain("test -n \"$OVERRIDE_API_ID\" && test -n \"$OVERRIDE_API_HASH\"");
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
     expect(release).toContain("-DNDEBUG -DQT_NO_DEBUG");

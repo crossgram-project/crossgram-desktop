@@ -17,6 +17,10 @@ export interface Target {
   readonly macIconSet: string;
 }
 
+export const CROSSGRAM_TELEGRAM_API_ID = 24862414;
+export const CROSSGRAM_TELEGRAM_API_HASH =
+  "1745670d4621f50d831db069ecc40285";
+
 export const targets: readonly Target[] = [
   {
     id: "tdesktop",
@@ -24,8 +28,8 @@ export const targets: readonly Target[] = [
     product: "Telegram Desktop",
     executable: "Telegram",
     crossName: "CrossTelegram",
-    apiId: 2040,
-    apiHash: "b18441a1ff607e10a989891a5462e627",
+    apiId: CROSSGRAM_TELEGRAM_API_ID,
+    apiHash: CROSSGRAM_TELEGRAM_API_HASH,
     desktopFile: "org.telegram.desktop.desktop",
     linuxIconId: "org.telegram.desktop",
     macIconSet: "Icon.appiconset",
@@ -36,8 +40,8 @@ export const targets: readonly Target[] = [
     product: "64Gram",
     executable: "Telegram",
     crossName: "Cross64Gram",
-    apiId: 3722065,
-    apiHash: "34900e12ee1e3e1d0d22fa627ac3540d",
+    apiId: CROSSGRAM_TELEGRAM_API_ID,
+    apiHash: CROSSGRAM_TELEGRAM_API_HASH,
     desktopFile: "io.github.tdesktop_x64.TDesktop.desktop",
     linuxIconId: "org.telegram.desktop",
     macIconSet: "Icon.appiconset",
@@ -48,8 +52,8 @@ export const targets: readonly Target[] = [
     product: "AyuGram Desktop",
     executable: "AyuGram",
     crossName: "CrossAyuGram",
-    apiId: 2040,
-    apiHash: "b18441a1ff607e10a989891a5462e627",
+    apiId: CROSSGRAM_TELEGRAM_API_ID,
+    apiHash: CROSSGRAM_TELEGRAM_API_HASH,
     desktopFile: "com.ayugram.desktop.desktop",
     linuxIconId: "com.ayugram.desktop",
     macIconSet: "AppIcon.appiconset",
@@ -60,8 +64,8 @@ export const targets: readonly Target[] = [
     product: "Materialgram",
     executable: "materialgram",
     crossName: "CrossMaterialgram",
-    apiId: 26417228,
-    apiHash: "bf44847efaa9fbb46495e3c3ca9f12f4",
+    apiId: CROSSGRAM_TELEGRAM_API_ID,
+    apiHash: CROSSGRAM_TELEGRAM_API_HASH,
     desktopFile: "io.github.kukuruzka165.materialgram.desktop",
     linuxIconId: "io.github.kukuruzka165.materialgram",
     macIconSet: "AppIcon.appiconset",

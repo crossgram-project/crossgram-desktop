@@ -97,7 +97,7 @@ User archives contain stripped production binaries built with `NDEBUG` and `QT_N
 
 The publish job uses the repository secret `CROSSGRAM_RELEASE_TOKEN` when present and otherwise falls back to `GITHUB_TOKEN`. Organizations that force the default Actions token to read-only must provide a fine-grained token with repository Contents read/write access through that secret.
 
-CI defaults to the production API ID/hash recovered from each upstream's official release binary: Telegram Desktop and AyuGram use Telegram Desktop's credentials, while 64Gram and Materialgram keep their own. Repository secrets `TDESKTOP_API_ID` and `TDESKTOP_API_HASH` may override both values together. Release builds never fall back to `TDESKTOP_API_TEST=ON`.
+CI uses the Crossgram project's Telegram API identity for every supported client target. Repository secrets `TDESKTOP_API_ID` and `TDESKTOP_API_HASH` may override both values together; a partial override is rejected. Release builds never fall back to `TDESKTOP_API_TEST=ON`.
 
 Release tags use this form:
 
