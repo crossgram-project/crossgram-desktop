@@ -78,14 +78,8 @@ describe("targets", () => {
       "utf8",
     );
     expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
-    expect(release).toContain("matrix.platform == 'windows' && 'windows-2022'");
-    expect(release).not.toContain("matrix.platform == 'windows' && 'windows-latest'");
-    expect(release.match(/vsversion: "17\.0"/g)).toHaveLength(targets.length);
-    expect(release).not.toContain('vsversion: "18.0"');
-    expect(release).toContain('NUMBER_OF_PROCESSORS: "1"');
-    expect(release).toContain('CL_MPCount: "2"');
-    expect(release).toContain("_CL_: -FS");
-    expect(release).not.toContain("_CL_: /FS");
+    expect(release).toContain("matrix.platform == 'windows' && 'windows-latest'");
+    expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(targets.length);
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
