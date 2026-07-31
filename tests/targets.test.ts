@@ -96,6 +96,8 @@ describe("targets", () => {
     expect(release).not.toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
     expect(release).toContain("$symbolRoot = Join-Path $source 'out'");
     expect(release).toContain('-Filter "$($metadata.executable).pdb" -File -Recurse');
+    expect(release).toContain("-Filter '*.pdb' -File -Recurse");
+    expect(release).toContain("Where-Object { $_.Name -ne 'Updater.pdb' }");
     expect(release).toContain("Copy-Item -LiteralPath $symbolFile -Destination $symbolsStage");
     expect(release).toContain("& tar.exe -a -cf $symbolsArchivePath -C $symbolsStage");
     expect(release).toContain("-DNDEBUG -DQT_NO_DEBUG");

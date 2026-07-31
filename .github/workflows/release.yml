@@ -274,6 +274,12 @@ jobs:
             $productPdb = Get-ChildItem -LiteralPath $symbolRoot -Filter "$($metadata.executable).pdb" -File -Recurse |
               Sort-Object LastWriteTimeUtc -Descending |
               Select-Object -First 1 -ExpandProperty FullName
+            if (-not $productPdb) {
+              $productPdb = Get-ChildItem -LiteralPath $symbolRoot -Filter '*.pdb' -File -Recurse |
+                Where-Object { $_.Name -ne 'Updater.pdb' } |
+                Sort-Object LastWriteTimeUtc -Descending |
+                Select-Object -First 1 -ExpandProperty FullName
+            }
             if (-not $productPdb) { throw "Missing external symbols for $product" }
             $symbolFiles = @($productPdb)
             $updaterPdb = Get-ChildItem -LiteralPath $symbolRoot -Filter 'Updater.pdb' -File -Recurse |
