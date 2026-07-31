@@ -166,7 +166,9 @@ jobs:
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
           CL_MPCount: "2"
-          _CL_: /FS
+          # Use the dash spelling so MSYS2 doesn't path-convert /FS into
+          # <msys-root>/FS before invoking cl.exe from dependency scripts.
+          _CL_: -FS
         run: |
           $source = Join-Path $env:GITHUB_WORKSPACE 'work/TBuild/source'
           $telegram = Join-Path $source 'Telegram'

@@ -83,7 +83,8 @@ describe("targets", () => {
     expect(release.match(/vsversion: "17\.0"/g)).toHaveLength(targets.length);
     expect(release).not.toContain('vsversion: "18.0"');
     expect(release).toContain('CL_MPCount: "2"');
-    expect(release).toContain("_CL_: /FS");
+    expect(release).toContain("_CL_: -FS");
+    expect(release).not.toContain("_CL_: /FS");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
