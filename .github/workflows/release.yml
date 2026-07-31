@@ -43,7 +43,7 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.build.target }} / ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ matrix.platform == 'windows' && 'windows-2022' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -52,19 +52,19 @@ jobs:
           - target: tdesktop
             brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
+            vsversion: "17.0"
           - target: tdesktop-x64
             brands: '["cross"]'
             repository: TDesktop-x64/tdesktop
-            vsversion: "18.0"
+            vsversion: "17.0"
           - target: ayugram
             brands: '["cross"]'
             repository: AyuGram/AyuGramDesktop
-            vsversion: "18.0"
+            vsversion: "17.0"
           - target: materialgram
             brands: '["cross"]'
             repository: kukuruzka165/materialgram
-            vsversion: "18.0"
+            vsversion: "17.0"
     steps:
       - name: Check out patcher
         uses: actions/checkout@v7
@@ -165,6 +165,8 @@ jobs:
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+          CL_MPCount: "2"
+          _CL_: /FS
         run: |
           $source = Join-Path $env:GITHUB_WORKSPACE 'work/TBuild/source'
           $telegram = Join-Path $source 'Telegram'
