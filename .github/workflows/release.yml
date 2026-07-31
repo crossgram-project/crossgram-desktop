@@ -240,7 +240,7 @@ jobs:
             $metadata = Get-BrandMetadata $brand
             Push-Location $telegram
             try {
-              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase' '-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib' '-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL /OPT:REF /OPT:ICF' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
+              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded' '-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib' '-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL /OPT:REF /OPT:ICF' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
               if ($LASTEXITCODE -ne 0) { throw "Configure failed for $brand" }
               & cmake --build ..\out --config Release --parallel
               if ($LASTEXITCODE -ne 0) { throw "Build failed for $brand" }
@@ -270,22 +270,28 @@ jobs:
             & tar.exe -a -cf $archivePath -C $output @packageNames
             if ($LASTEXITCODE -ne 0) { throw "Could not create $archive" }
 
-            $symbolFiles = @()
-            $productPdb = [IO.Path]::ChangeExtension($product, '.pdb')
-            if (-not (Test-Path -LiteralPath $productPdb)) {
-              $productPdb = Get-ChildItem -LiteralPath $output -Filter '*.pdb' -File |
-                Where-Object { $_.Name -ne 'Updater.pdb' } |
-                Sort-Object LastWriteTimeUtc -Descending |
-                Select-Object -First 1 -ExpandProperty FullName
-            }
+            $symbolRoot = Join-Path $source 'out'
+            $productPdb = Get-ChildItem -LiteralPath $symbolRoot -Filter "$($metadata.executable).pdb" -File -Recurse |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
             if (-not $productPdb) { throw "Missing external symbols for $product" }
-            $symbolFiles += $productPdb
-            $updaterPdb = Join-Path $output 'Updater.pdb'
-            if (Test-Path -LiteralPath $updaterPdb) { $symbolFiles += $updaterPdb }
+            $symbolFiles = @($productPdb)
+            $updaterPdb = Get-ChildItem -LiteralPath $symbolRoot -Filter 'Updater.pdb' -File -Recurse |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+            if ($updaterPdb) { $symbolFiles += $updaterPdb }
+            $symbolsStage = Join-Path $env:RUNNER_TEMP "crossgram-symbols-$brand"
+            if (Test-Path -LiteralPath $symbolsStage) {
+              Remove-Item -LiteralPath $symbolsStage -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $symbolsStage | Out-Null
+            foreach ($symbolFile in $symbolFiles) {
+              Copy-Item -LiteralPath $symbolFile -Destination $symbolsStage
+            }
             $symbolsArchive = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$env:VERSION.symbols.zip"
             $symbolsArchivePath = [IO.Path]::GetFullPath($symbolsArchive)
             $symbolNames = @($symbolFiles | ForEach-Object { [IO.Path]::GetFileName($_) })
-            & tar.exe -a -cf $symbolsArchivePath -C $output @symbolNames
+            & tar.exe -a -cf $symbolsArchivePath -C $symbolsStage @symbolNames
             if ($LASTEXITCODE -ne 0) { throw "Could not create $symbolsArchive" }
           }
           $releaseMetadata = [ordered]@{

@@ -92,8 +92,12 @@ describe("targets", () => {
     expect(release).toContain("Both API overrides are required");
     expect(release).toContain("test -n \"$OVERRIDE_API_ID\" && test -n \"$OVERRIDE_API_HASH\"");
     expect(release).toContain("'-GNinja Multi-Config'");
-    expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
-    expect(release).not.toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
+    expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
+    expect(release).not.toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
+    expect(release).toContain("$symbolRoot = Join-Path $source 'out'");
+    expect(release).toContain('-Filter "$($metadata.executable).pdb" -File -Recurse');
+    expect(release).toContain("Copy-Item -LiteralPath $symbolFile -Destination $symbolsStage");
+    expect(release).toContain("& tar.exe -a -cf $symbolsArchivePath -C $symbolsStage");
     expect(release).toContain("-DNDEBUG -DQT_NO_DEBUG");
     expect(release).toContain("& tar.exe -a -cf $archivePath");
     expect(release).toContain("& tar.exe -a -cf $symbolsArchivePath");
