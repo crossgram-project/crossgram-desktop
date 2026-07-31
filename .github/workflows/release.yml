@@ -165,6 +165,10 @@ jobs:
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
+          # desktop-app/patches builds Debug and Release libvpx targets via
+          # make -j$NUMBER_OF_PROCESSORS. Run those MSBuild invocations in
+          # sequence so their generated assembly objects cannot race/crash.
+          NUMBER_OF_PROCESSORS: "1"
           CL_MPCount: "2"
           # Use the dash spelling so MSYS2 doesn't path-convert /FS into
           # <msys-root>/FS before invoking cl.exe from dependency scripts.
