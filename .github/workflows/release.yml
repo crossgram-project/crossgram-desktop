@@ -226,6 +226,10 @@ jobs:
             Pop-Location
           }
 
+          # Keep dependency builds on embedded debug information, then force the
+          # application linker to emit a standalone PDB for the symbols asset.
+          $env:_LINK_ = '/DEBUG:FULL /OPT:REF /OPT:ICF'
+
           $effectiveId = [string]$firstMetadata.apiId
           $effectiveHash = [string]$firstMetadata.apiHash
           if ($env:OVERRIDE_API_ID -or $env:OVERRIDE_API_HASH) {

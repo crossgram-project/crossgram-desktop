@@ -96,6 +96,7 @@ describe("targets", () => {
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
     expect(release).not.toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
+    expect(release).toContain("$env:_LINK_ = '/DEBUG:FULL /OPT:REF /OPT:ICF'");
     expect(release).toContain("$symbolRoot = Join-Path $source 'out'");
     expect(release).toContain('-Filter "$($metadata.executable).pdb" -File -Recurse');
     expect(release).toContain("-Filter '*.pdb' -File -Recurse");
