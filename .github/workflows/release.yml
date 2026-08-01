@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   build:
-    name: ${{ matrix.build.target }} / ${{ matrix.platform }}
+    name: ${{ matrix.build.target }} / ${{ matrix.build.brand }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -50,19 +50,39 @@ jobs:
         platform: ${{ fromJSON(inputs.platforms == 'windows-linux' && '["windows","linux"]' || inputs.platforms == 'windows' && '["windows"]' || inputs.platforms == 'linux' && '["linux"]' || inputs.platforms == 'macos' && '["macos"]' || '["windows","linux","macos"]') }}
         build:
           - target: tdesktop
-            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
+            brand: cross
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: qq
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: wechat
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: wecom
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: dingtalk
+            repository: telegramdesktop/tdesktop
+            vsversion: "18.0"
+          - target: tdesktop
+            brand: discord
             repository: telegramdesktop/tdesktop
             vsversion: "18.0"
           - target: tdesktop-x64
-            brands: '["cross"]'
+            brand: cross
             repository: TDesktop-x64/tdesktop
             vsversion: "18.0"
           - target: ayugram
-            brands: '["cross"]'
+            brand: cross
             repository: AyuGram/AyuGramDesktop
             vsversion: "18.0"
           - target: materialgram
-            brands: '["cross"]'
+            brand: cross
             repository: kukuruzka165/materialgram
             vsversion: "18.0"
     steps:
@@ -87,9 +107,9 @@ jobs:
         id: plan
         shell: bash
         env:
-          BRANDS: ${{ matrix.build.brands }}
           TARGET_FILTER: ${{ inputs.target }}
           MATRIX_TARGET: ${{ matrix.build.target }}
+          MATRIX_BRAND: ${{ matrix.build.brand }}
           BRAND_FILTER: ${{ inputs.brands }}
         run: |
           if [ -n "$TARGET_FILTER" ] && [ "$TARGET_FILTER" != all ] && [ "$TARGET_FILTER" != "$MATRIX_TARGET" ]; then
@@ -97,28 +117,18 @@ jobs:
             echo 'brands=[]' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          selected=()
-          while IFS= read -r brand; do
-            brand="${brand%$'\r'}"
-            if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
-              case ",$BRAND_FILTER," in
-                *",$brand,"*)
-                  selected+=("$brand")
-                  continue
-                  ;;
-                *) continue ;;
-              esac
-            fi
-            selected+=("$brand")
-          done < <(jq -r '.[]' <<<"$BRANDS")
-          if [ "${#selected[@]}" -gt 0 ]; then
-            brands="$(printf '%s\n' "${selected[@]}" | jq -R . | jq -sc .)"
-            echo "needed=true" >> "$GITHUB_OUTPUT"
-            echo "brands=$brands" >> "$GITHUB_OUTPUT"
-          else
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-            echo 'brands=[]' >> "$GITHUB_OUTPUT"
+          if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
+            case ",$BRAND_FILTER," in
+              *",$MATRIX_BRAND,"*) ;;
+              *)
+                echo "needed=false" >> "$GITHUB_OUTPUT"
+                echo 'brands=[]' >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
           fi
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+          echo "brands=$(jq -cn --arg brand "$MATRIX_BRAND" '[$brand]')" >> "$GITHUB_OUTPUT"
 
       - name: Check out upstream
         if: steps.plan.outputs.needed == 'true'
@@ -622,7 +632,7 @@ jobs:
         if: always() && steps.plan.outputs.needed == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: crossgram-${{ matrix.build.target }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
+          name: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
           path: artifacts/crossgram-*
           if-no-files-found: warn
           retention-days: 14

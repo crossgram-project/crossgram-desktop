@@ -56,12 +56,8 @@ describe("targets", () => {
     const matrixBuilds = (workflow: string) =>
       [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brand: (\S+)$/gm)]
         .map((match) => `${match[1]}/${match[2]}`);
-    const groupedMatrixBuilds = (workflow: string) =>
-      [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brands: '([^']+)'$/gm)]
-        .flatMap((match) => (JSON.parse(match[2]!) as string[])
-          .map((brand) => `${match[1]}/${brand}`));
     expect(matrixBuilds(check)).toEqual(expected);
-    expect(groupedMatrixBuilds(release).sort()).toEqual([...expected].sort());
+    expect(matrixBuilds(release).sort()).toEqual([...expected].sort());
     expect(release).toContain("name: Publish one unified release");
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
     expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");
@@ -79,7 +75,9 @@ describe("targets", () => {
     );
     expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
     expect(release).toContain("matrix.platform == 'windows' && 'windows-latest'");
-    expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(targets.length);
+    expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(9);
+    expect(release).toContain("matrix.build.target }} / ${{ matrix.build.brand }} / ${{ matrix.platform");
+    expect(release).toContain("crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}--${{ matrix.platform }}");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
