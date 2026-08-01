@@ -68,6 +68,8 @@ describe("targets", () => {
     expect(release).not.toContain('release_tag="crossgram/$TARGET/');
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
+    expect(check).toContain('Verify 64Gram Windows CBOR symbol isolation');
+    expect(check).toContain('cbor_encode_double=crossgram_libcbor_encode_double');
   });
 
   it("uses platform-safe release runners and environment names", async () => {
@@ -76,6 +78,8 @@ describe("targets", () => {
       "utf8",
     );
     expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
+    expect(release).toContain("matrix.platform == 'windows' && 'windows-latest'");
+    expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(targets.length);
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
@@ -91,6 +95,14 @@ describe("targets", () => {
     expect(release).toContain("test -n \"$OVERRIDE_API_ID\" && test -n \"$OVERRIDE_API_HASH\"");
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
+    expect(release).not.toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
+    expect(release).toContain("$env:_LINK_ = '/DEBUG:FULL /OPT:REF /OPT:ICF'");
+    expect(release).toContain("$symbolRoot = Join-Path $source 'out'");
+    expect(release).toContain('-Filter "$($metadata.executable).pdb" -File -Recurse');
+    expect(release).toContain("-Filter '*.pdb' -File -Recurse");
+    expect(release).toContain("Where-Object { $_.Name -ne 'Updater.pdb' }");
+    expect(release).toContain("Copy-Item -LiteralPath $symbolFile -Destination $symbolsStage");
+    expect(release).toContain("& tar.exe -a -cf $symbolsArchivePath -C $symbolsStage");
     expect(release).toContain("-DNDEBUG -DQT_NO_DEBUG");
     expect(release).toContain("& tar.exe -a -cf $archivePath");
     expect(release).toContain("& tar.exe -a -cf $symbolsArchivePath");
