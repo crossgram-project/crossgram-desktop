@@ -15,6 +15,18 @@ FFmpeg streaming pipeline, while animated stickers and custom reactions reuse
 the alpha-preserving sticker clip player. No desktop-specific WebM/WebP
 derivative is required from the relay.
 
+Message drags use a Crossgram process-local token instead of Telegram
+Desktop's bare `application/x-td-forward` marker. A drop inside the same
+process and account keeps native forwarding. Drops into another process or
+account fall back to the standard image or local-file MIME payload and are
+uploaded as new media, which also allows downloaded media to be dragged into
+an unmodified Telegram Desktop instance. A foreign Telegram Desktop drag is
+treated the same way when it exposes loaded image data or downloaded files.
+Multi-message drags export every loaded photo and every downloaded or
+memory-cached document into an ordered local-file list; if any selected item
+cannot be materialized, the external file payload is suppressed rather than
+sending only part of the selection.
+
 Supported upstreams:
 
 - `telegramdesktop/tdesktop`

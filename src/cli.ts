@@ -7,6 +7,7 @@ import { patchBranding } from "../features/branding/patch.js";
 import { patchE2e } from "../features/e2e/patch.js";
 import { patchServerSwitch } from "../features/server-switch/patch.js";
 import { patchDirectDownload } from "../features/direct-download/patch.js";
+import { patchCrossInstanceForward } from "../features/cross-instance-forward/patch.js";
 import { patchRawAnimation } from "../features/raw-animation/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
@@ -73,6 +74,11 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       root: values.root!,
       target,
       featureRoot: resolve(repositoryRoot, "features/direct-download"),
+    });
+    await patchCrossInstanceForward({
+      root: values.root!,
+      target,
+      featureRoot: resolve(repositoryRoot, "features/cross-instance-forward"),
     });
     await patchRawAnimation({
       root: values.root!,
