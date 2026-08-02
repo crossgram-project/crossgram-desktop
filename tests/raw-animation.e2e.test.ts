@@ -23,6 +23,7 @@ async function fixture(eol = "\n"): Promise<string> {
     mkdir(data, { recursive: true }),
     mkdir(clip, { recursive: true }),
     mkdir(path.join(root, "Telegram", "build", "prepare"), { recursive: true }),
+    mkdir(path.join(root, "Telegram", "build", "patches"), { recursive: true }),
     mkdir(path.join(root, "Telegram", "build", "docker", "centos_env"), { recursive: true }),
     mkdir(path.join(root, "snap"), { recursive: true }),
   ]);
@@ -104,6 +105,13 @@ bool DocumentData::isAnimation() const {
       "utf8",
     ),
     writeFile(
+      path.join(root, "Telegram", "build", "patches", "build_ffmpeg_win.sh"),
+      `        --enable-decoder=gif \\
+        --enable-demuxer=gif \\
+`.replaceAll("\n", eol),
+      "utf8",
+    ),
+    writeFile(
       path.join(root, "Telegram", "build", "docker", "centos_env", "Dockerfile"),
       `\t\t--enable-decoder=gif \\
 \t\t--enable-demuxer=gif \\
@@ -170,7 +178,7 @@ async function patch(root: string): Promise<string> {
 }
 
 describe("Desktop raw GIF/APNG animation patch", () => {
-  it("enables APNG demuxing in Windows, macOS, Linux, and Snap dependency builds", async () => {
+  it("enables the APNG demuxer and decoder in Windows, macOS, Linux, and Snap builds", async () => {
     const root = await fixture();
     await patch(root);
     const read = (relative: string) => readFile(path.join(root, relative), "utf8");
@@ -180,6 +188,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     const helper = await read("Telegram/build/prepare/enable_ffmpeg_apng.py");
     for (const source of [prepare, docker, snap]) {
       expect(source).toContain("--enable-decoder=png");
+      expect(source).toContain("--enable-decoder=apng");
       expect(source).toContain("--enable-demuxer=apng");
     }
     expect(prepare).toContain("enable_ffmpeg_apng.py");
@@ -188,6 +197,9 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     );
     expect(helper).toContain("build_ffmpeg_win.sh");
     expect(prepare.match(/--enable-decoder=png/g)).toHaveLength(1);
+    expect(prepare.match(/--enable-decoder=apng/g)).toHaveLength(1);
+    expect(docker.match(/--enable-decoder=apng/g)).toHaveLength(1);
+    expect(snap.match(/--enable-decoder=apng/g)).toHaveLength(1);
     expect(docker.match(/--enable-demuxer=apng/g)).toHaveLength(1);
 
     const command = prepare.split(/\r?\n/).find((line) =>
@@ -207,6 +219,23 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(evaluated.stdout).toContain(
       "%ROOT_DIR%\\source\\Telegram\\build\\prepare\\enable_ffmpeg_apng.py",
     );
+
+    const windowsBuild = path.join(
+      root,
+      "Telegram/build/patches/build_ffmpeg_win.sh",
+    );
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const applied = spawnSync("python", [
+        path.join(root, "Telegram/build/prepare/enable_ffmpeg_apng.py"),
+        windowsBuild,
+      ], { encoding: "utf8" });
+      if (applied.error) throw applied.error;
+      expect(applied.status).toBe(0);
+    }
+    const windows = await readFile(windowsBuild, "utf8");
+    expect(windows.match(/--enable-decoder=png/g)).toHaveLength(1);
+    expect(windows.match(/--enable-decoder=apng/g)).toHaveLength(1);
+    expect(windows.match(/--enable-demuxer=apng/g)).toHaveLength(1);
   });
 
   it("keeps Animated attributes on stickers and custom reactions in the clip-reader path", async () => {

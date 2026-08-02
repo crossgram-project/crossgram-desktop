@@ -25,8 +25,8 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   await context.edit("Telegram/build/prepare/prepare.py", (file) => {
     file.replacePattern(
       /^([ \t]+)--enable-decoder=gif \\$/m,
-      "$1--enable-decoder=gif \\\n$1--enable-decoder=png \\",
-      "--enable-decoder=png",
+      "$1--enable-decoder=gif \\\n$1--enable-decoder=png \\\n$1--enable-decoder=apng \\",
+      "--enable-decoder=apng",
     );
     file.replacePattern(
       /^([ \t]+)--enable-demuxer=gif \\$/m,
@@ -44,8 +44,8 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   await context.edit("Telegram/build/docker/centos_env/Dockerfile", (file) => {
     file.replacePattern(
       /^([ \t]+)--enable-decoder=gif \\$/m,
-      "$1--enable-decoder=gif \\\n$1--enable-decoder=png \\",
-      "--enable-decoder=png",
+      "$1--enable-decoder=gif \\\n$1--enable-decoder=png \\\n$1--enable-decoder=apng \\",
+      "--enable-decoder=apng",
     );
     file.replacePattern(
       /^([ \t]+)--enable-demuxer=gif \\$/m,
@@ -58,8 +58,8 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
     await context.edit("snap/snapcraft.yaml", (file) => {
       file.insertAfter(
         "      - --enable-decoder=gif",
-        "\n      - --enable-decoder=png",
-        "--enable-decoder=png",
+        "\n      - --enable-decoder=png\n      - --enable-decoder=apng",
+        "--enable-decoder=apng",
       );
       file.insertAfter(
         "      - --enable-demuxer=gif",
