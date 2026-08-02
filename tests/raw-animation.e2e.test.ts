@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -182,9 +183,30 @@ describe("Desktop raw GIF/APNG animation patch", () => {
       expect(source).toContain("--enable-demuxer=apng");
     }
     expect(prepare).toContain("enable_ffmpeg_apng.py");
+    expect(prepare).toContain(
+      'python "%ROOT_DIR%\\\\Telegram\\\\build\\\\prepare\\\\enable_ffmpeg_apng.py"',
+    );
     expect(helper).toContain("build_ffmpeg_win.sh");
     expect(prepare.match(/--enable-decoder=png/g)).toHaveLength(1);
     expect(docker.match(/--enable-demuxer=apng/g)).toHaveLength(1);
+
+    const command = prepare.split(/\r?\n/).find((line) =>
+      line.includes("enable_ffmpeg_apng.py"),
+    );
+    expect(command).toBeDefined();
+    const evaluated = spawnSync("python", [
+      "-c",
+      "import ast,sys; print(ast.literal_eval(chr(34)*3 + sys.stdin.read() + chr(34)*3))",
+    ], {
+      input: command,
+      encoding: "utf8",
+    });
+    if (evaluated.error) throw evaluated.error;
+    expect(evaluated.status).toBe(0);
+    expect(evaluated.stdout).not.toContain("\b");
+    expect(evaluated.stdout).toContain(
+      "%ROOT_DIR%\\Telegram\\build\\prepare\\enable_ffmpeg_apng.py",
+    );
   });
 
   it("keeps Animated attributes on stickers and custom reactions in the clip-reader path", async () => {
