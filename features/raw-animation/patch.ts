@@ -35,7 +35,7 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
     );
     file.insertBefore(
       "    bash --login ../patches/build_ffmpeg_win.sh",
-      `    python "%ROOT_DIR%\\\\Telegram\\\\build\\\\prepare\\\\enable_ffmpeg_apng.py" ../patches/build_ffmpeg_win.sh
+      `    python "%ROOT_DIR%\\\\source\\\\Telegram\\\\build\\\\prepare\\\\enable_ffmpeg_apng.py" ../patches/build_ffmpeg_win.sh
 `,
       "enable_ffmpeg_apng.py",
     );

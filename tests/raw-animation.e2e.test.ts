@@ -184,7 +184,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     }
     expect(prepare).toContain("enable_ffmpeg_apng.py");
     expect(prepare).toContain(
-      'python "%ROOT_DIR%\\\\Telegram\\\\build\\\\prepare\\\\enable_ffmpeg_apng.py"',
+      'python "%ROOT_DIR%\\\\source\\\\Telegram\\\\build\\\\prepare\\\\enable_ffmpeg_apng.py"',
     );
     expect(helper).toContain("build_ffmpeg_win.sh");
     expect(prepare.match(/--enable-decoder=png/g)).toHaveLength(1);
@@ -205,7 +205,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(evaluated.status).toBe(0);
     expect(evaluated.stdout).not.toContain("\b");
     expect(evaluated.stdout).toContain(
-      "%ROOT_DIR%\\Telegram\\build\\prepare\\enable_ffmpeg_apng.py",
+      "%ROOT_DIR%\\source\\Telegram\\build\\prepare\\enable_ffmpeg_apng.py",
     );
   });
 
