@@ -9,15 +9,21 @@
 namespace Crossgram::DirectDownload {
 
 bool IsCandidate(const QByteArray &fileReference) {
-	constexpr auto kPrefix = "bridge-media:";
-	constexpr auto kPrefixSize = 13;
-	if (!fileReference.startsWith(kPrefix)) return false;
-	const auto suffix = fileReference.mid(kPrefixSize);
-	if (suffix.isEmpty() || suffix.front() == '0') return false;
-	for (const auto value : suffix) {
-		if (value < '0' || value > '9') return false;
+	constexpr char kMediaPrefix[] = "bridge-media:";
+	if (fileReference.startsWith(kMediaPrefix)) {
+		const auto suffix = fileReference.mid(sizeof(kMediaPrefix) - 1);
+		if (suffix.isEmpty() || suffix.front() == '0') return false;
+		for (const auto value : suffix) {
+			if (value < '0' || value > '9') return false;
+		}
+		return true;
 	}
-	return true;
+	constexpr char kStickerPrefix[] = "bridge-sticker:";
+	constexpr char kReactionPrefix[] = "bridge-reaction-resource:";
+	return (fileReference.startsWith(kStickerPrefix)
+		&& fileReference.size() > int(sizeof(kStickerPrefix) - 1))
+		|| (fileReference.startsWith(kReactionPrefix)
+			&& fileReference.size() > int(sizeof(kReactionPrefix) - 1));
 }
 
 std::optional<ResolvedUrl> ParseResolvedUrl(const QByteArray &json) {

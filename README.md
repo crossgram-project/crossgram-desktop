@@ -8,6 +8,13 @@ expiry, or HTTP failure silently falls back to the original `upload.getFile`
 relay path. The download task exposes `crossgramDownloadTransport()` for
 diagnostics and logs `crossgram_download_transport=<direct|relay>`.
 
+The same direct HTTP path is used for `bridge-sticker:` and
+`bridge-reaction-resource:` documents. Original PNG, GIF, and APNG assets are
+kept in their source format: animated image documents use the upstream
+FFmpeg streaming pipeline, while animated stickers and custom reactions reuse
+the alpha-preserving sticker clip player. No desktop-specific WebM/WebP
+derivative is required from the relay.
+
 Supported upstreams:
 
 - `telegramdesktop/tdesktop`

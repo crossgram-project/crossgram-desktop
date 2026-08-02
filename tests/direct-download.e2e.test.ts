@@ -100,6 +100,14 @@ describe("Desktop direct-download patch e2e", () => {
     expect(helper).toContain("total > end");
   });
 
+  it("offers raw stickers and reaction animations to the direct URL resolver", async () => {
+    const { helper } = await patchedFixture();
+    expect(helper).toContain('constexpr char kStickerPrefix[] = "bridge-sticker:";');
+    expect(helper).toContain('constexpr char kReactionPrefix[] = "bridge-reaction-resource:";');
+    expect(helper).toContain("fileReference.startsWith(kStickerPrefix)");
+    expect(helper).toContain("fileReference.startsWith(kReactionPrefix)");
+  });
+
   it("exposes transport state, handles expired URL refresh failure, and cancels HTTP", async () => {
     const { header, implementation } = await patchedFixture();
     expect(header).toContain("QString crossgramDownloadTransport() const;");
