@@ -70,6 +70,18 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   }
 
   await context.edit(`${sourceRoot}/data/data_document.cpp`, (file) => {
+    file.insertBefore(
+      `\tauto wasVideoData = isVideoFile() ? std::move(_additional) : nullptr;
+
+\t_videoPreloadPrefix = 0;`,
+      `\tconst auto crossgramRawAnimationMime = hasMimeType(u"image/gif"_q)
+\t\t|| hasMimeType(u"image/apng"_q);
+\tauto crossgramAnimatedAttribute = false;
+
+`,
+      "const auto crossgramRawAnimationMime",
+    );
+
     file.replace(
       `\t\t}, [&](const MTPDdocumentAttributeAnimated &data) {
 \t\t\tif (type == FileDocument
@@ -80,13 +92,11 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
 \t\t\t}
 \t\t}, [&](const MTPDdocumentAttributeSticker &data) {`,
       `\t\t}, [&](const MTPDdocumentAttributeAnimated &data) {
-\t\t\tconst auto rawImage = hasMimeType(u"image/gif"_q)
-\t\t\t\t|| hasMimeType(u"image/apng"_q)
-\t\t\t\t|| hasMimeType(u"image/png"_q);
-\t\t\tif (const auto info = sticker(); info && rawImage) {
-\t\t\t\t// The Webm sticker path is an FFmpeg-backed generic clip reader.
-\t\t\t\t// It also preserves alpha and timing for raw GIF/APNG bytes.
-\t\t\t\tinfo->type = StickerType::Webm;
+\t\t\tif (crossgramRawAnimationMime
+\t\t\t\t|| hasMimeType(u"image/png"_q)) {
+\t\t\t\t// Defer raw image classification until every attribute was read.
+\t\t\t\t// Telegram does not guarantee Sticker precedes Animated.
+\t\t\t\tcrossgramAnimatedAttribute = true;
 \t\t\t} else if (type == FileDocument
 \t\t\t\t|| type == VideoDocument
 \t\t\t\t|| (sticker() && sticker()->type != StickerType::Webm)) {
@@ -94,7 +104,24 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
 \t\t\t\t_additional = nullptr;
 \t\t\t}
 \t\t}, [&](const MTPDdocumentAttributeSticker &data) {`,
-      "preserves alpha and timing for raw GIF/APNG bytes",
+      "crossgramAnimatedAttribute = true",
+    );
+
+    file.insertBefore(
+      `\t// Any "video/webm" file is treated as a video-sticker.`,
+      `\t// Raw GIF/APNG stickers stay StickerDocument regardless of attribute
+\t// order, while the existing Webm player selects the generic FFmpeg reader.
+\tif (const auto info = sticker();
+\t\tinfo && (crossgramRawAnimationMime || crossgramAnimatedAttribute)) {
+\t\tinfo->type = StickerType::Webm;
+\t} else if (crossgramAnimatedAttribute
+\t\t&& (type == FileDocument || type == VideoDocument)) {
+\t\ttype = AnimatedDocument;
+\t\t_additional = nullptr;
+\t}
+
+`,
+      "Raw GIF/APNG stickers stay StickerDocument",
     );
 
     file.replace(
@@ -176,6 +203,40 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
 \t\t\t\t|| hasMimeType(u"image/apng"_q))
 \t\t\t&& !(_flags & Flag::StreamingPlaybackFailed));`,
       "APNG can be identified by MIME even without an Animated attribute",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/media/clip/media_clip_ffmpeg.h`, (file) => {
+    file.insertAfter(
+      "#include <libavutil/opt.h>",
+      "\n#include <libavutil/pixdesc.h>",
+      "#include <libavutil/pixdesc.h>",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/media/clip/media_clip_ffmpeg.cpp`, (file) => {
+    file.replace(
+      `\tif ((res = avformat_open_input(&_fmtContext, nullptr, nullptr, nullptr)) < 0) {
+\t\t_ioBuffer = nullptr;`,
+      `\tauto options = static_cast<AVDictionary*>(nullptr);
+\t// Stickers and GIF messages always loop in the UI. Let the GIF/APNG
+\t// demuxers replay their native animation instead of relying on seeking,
+\t// which is not reliable for every APNG stream.
+\tav_dict_set(&options, "ignore_loop", "0", 0);
+\tres = avformat_open_input(&_fmtContext, nullptr, nullptr, &options);
+\tav_dict_free(&options);
+\tif (res < 0) {
+\t\t_ioBuffer = nullptr;`,
+      'av_dict_set(&options, "ignore_loop", "0", 0)',
+    );
+
+    file.replace(
+      `\tconst auto bgra = (format == AV_PIX_FMT_BGRA);
+\thasAlpha = bgra || (format == AV_PIX_FMT_YUVA420P);`,
+      `\tconst auto bgra = (format == AV_PIX_FMT_BGRA);
+\tconst auto descriptor = av_pix_fmt_desc_get(AVPixelFormat(format));
+\thasAlpha = descriptor && (descriptor->flags & AV_PIX_FMT_FLAG_ALPHA);`,
+      "AV_PIX_FMT_FLAG_ALPHA",
     );
   });
 }
