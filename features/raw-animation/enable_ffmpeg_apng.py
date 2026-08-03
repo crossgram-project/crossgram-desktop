@@ -62,13 +62,15 @@ if len(sys.argv) != 2:
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-before = "#if HAVE_UNISTD_H-0"
-after = "#if 0 /* Crossgram MSVC: no unistd.h */"
-if after in text:
-    raise SystemExit(0)
-if text.count(before) != 1:
-    raise RuntimeError("expected one zconf HAVE_UNISTD_H probe")
-path.write_text(text.replace(before, after), encoding="utf-8")
+guard = (
+    "/* Crossgram MSVC: FFmpeg's config.h may claim unistd.h exists. */\\n"
+    "#if defined(_WIN32)\\n"
+    "# undef HAVE_UNISTD_H\\n"
+    "# define HAVE_UNISTD_H 0\\n"
+    "#endif\\n\\n"
+)
+if guard not in text:
+    path.write_text(guard + text, encoding="utf-8")
 """,
     encoding="utf-8",
 )

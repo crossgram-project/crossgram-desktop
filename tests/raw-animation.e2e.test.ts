@@ -203,8 +203,8 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(helper).toContain("../zlib/Release/libzs.lib");
     expect(helper).toContain("../zlib/Release/zlibstatic.lib");
     expect(helper).toContain("../zlib/zconf.h.in");
-    expect(helper).toContain("Crossgram MSVC: no unistd.h");
-    expect(helper).toContain("HAVE_UNISTD_H-0");
+    expect(helper).toContain("Crossgram MSVC: FFmpeg's config.h");
+    expect(helper).toContain("# define HAVE_UNISTD_H 0");
     expect(helper).toContain("sanitize_zconf_msvc.py");
     expect(helper).toContain("../local/lib/zlib.lib");
     expect(helper).toContain("../local/lib/pkgconfig/zlib.pc");
@@ -346,7 +346,7 @@ make -j$NUMBER_OF_PROCESSORS
     expect(windows.match(/Name: zlib/g)).toHaveLength(1);
   });
 
-  it("sanitizes zconf's FFmpeg HAVE_UNISTD_H probe before compiling with MSVC", async () => {
+  it("forces zconf's unistd probe off for MSVC without depending on its template", async () => {
     const root = await fixture();
     await patch(root);
     const build = path.join(
@@ -363,16 +363,25 @@ make -j$NUMBER_OF_PROCESSORS
       root,
       "Telegram/build/patches/sanitize_zconf_msvc.py",
     );
-    const header = path.join(root, "zconf.h");
-    await writeFile(header, `#if HAVE_UNISTD_H-0     /* may be set to #if 1 by ./configure */\n`, "utf8");
-
-    for (let pass = 0; pass < 2; pass++) {
-      const sanitized = spawnSync("python", [helper, header], { encoding: "utf8" });
-      expect(sanitized.status, sanitized.stderr).toBe(0);
+    const variants = [
+      "#if HAVE_UNISTD_H-0     /* may be set to #if 1 by ./configure */\n",
+      "#if HAVE_UNISTD_H\n",
+      "#if 0 /* already configured without unistd */\n",
+    ];
+    for (const [index, source] of variants.entries()) {
+      const header = path.join(root, `zconf-${index}.h`);
+      await writeFile(header, source, "utf8");
+      for (let pass = 0; pass < 2; pass++) {
+        const sanitized = spawnSync("python", [helper, header], { encoding: "utf8" });
+        expect(sanitized.status, sanitized.stderr).toBe(0);
+      }
+      const staged = await readFile(header, "utf8");
+      expect(staged).toContain("#if defined(_WIN32)");
+      expect(staged).toContain("# undef HAVE_UNISTD_H");
+      expect(staged).toContain("# define HAVE_UNISTD_H 0");
+      expect(staged.match(/Crossgram MSVC: FFmpeg's config\.h/g)).toHaveLength(1);
+      expect(staged).toContain(source.trim());
     }
-    const source = await readFile(header, "utf8");
-    expect(source).toContain("#if 0 /* Crossgram MSVC: no unistd.h */");
-    expect(source).not.toContain("#if HAVE_UNISTD_H-0");
   });
 
   it("moves the oversized MSVC archive object list into a make response file", async () => {
