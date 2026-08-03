@@ -51,6 +51,27 @@ if after not in text:
 """,
     encoding="utf-8",
 )
+zconf_helper = path.with_name("sanitize_zconf_msvc.py")
+zconf_helper.write_text(
+    """#!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+if len(sys.argv) != 2:
+    raise SystemExit("usage: sanitize_zconf_msvc.py <zconf.h>")
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+before = "#if HAVE_UNISTD_H-0"
+after = "#if 0 /* Crossgram MSVC: no unistd.h */"
+if after in text:
+    raise SystemExit(0)
+if text.count(before) != 1:
+    raise RuntimeError("expected one zconf HAVE_UNISTD_H probe")
+path.write_text(text.replace(before, after), encoding="utf-8")
+""",
+    encoding="utf-8",
+)
 archive_install = (
     "zlib_library=\n"
     "for candidate in \\\n"
@@ -68,6 +89,13 @@ legacy_archive_install = (
 )
 legacy_zconf_install = (
     "install -m 0644 \"$FullScriptPath/../zlib/zconf.h\" "
+    "\"$FullScriptPath/../local/include/zconf.h\"\n"
+)
+zconf_msvc_sanitize = (
+    "# FFmpeg's generated config.h defines HAVE_UNISTD_H while compiling with\n"
+    "# MSVC. Do not let zconf.h turn that probe into an unavailable unistd.h\n"
+    "# include. zlib itself has already been built before this staging step.\n"
+    "python \"$FullScriptPath/sanitize_zconf_msvc.py\" "
     "\"$FullScriptPath/../local/include/zconf.h\"\n"
 )
 if legacy_archive_install in text:
@@ -92,6 +120,11 @@ if archive_install.strip() not in text:
         + archive_install
         + "\n",
     )
+text = insert_before(
+    text,
+    "./configure --prefix=",
+    zconf_msvc_sanitize,
+)
 text = insert_before(
     text,
     "./configure --prefix=",

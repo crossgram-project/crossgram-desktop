@@ -203,6 +203,9 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(helper).toContain("../zlib/Release/libzs.lib");
     expect(helper).toContain("../zlib/Release/zlibstatic.lib");
     expect(helper).toContain("../zlib/zconf.h.in");
+    expect(helper).toContain("Crossgram MSVC: no unistd.h");
+    expect(helper).toContain("HAVE_UNISTD_H-0");
+    expect(helper).toContain("sanitize_zconf_msvc.py");
     expect(helper).toContain("../local/lib/zlib.lib");
     expect(helper).toContain("../local/lib/pkgconfig/zlib.pc");
     expect(helper).toContain('Libs: -L\\\\${libdir} -lz');
@@ -253,6 +256,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(windows.match(/\.\.\/zlib\/Release\/zlibstatic\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/zlib\/zconf\.h\.in/g)).toHaveLength(1);
     expect(windows).not.toContain('../zlib/zconf.h"');
+    expect(windows).toContain("sanitize_zconf_msvc.py");
     expect(windows).toContain('install -m 0644 "$zlib_library"');
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
@@ -302,6 +306,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(windows.match(/\.\.\/zlib\/Release\/zlibstatic\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/zlib\/zconf\.h\.in/g)).toHaveLength(1);
     expect(windows).not.toContain('../zlib/zconf.h"');
+    expect(windows).toContain("sanitize_zconf_msvc.py");
     expect(windows).toContain('install -m 0644 "$zlib_library"');
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
@@ -339,6 +344,35 @@ make -j$NUMBER_OF_PROCESSORS
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
     expect(windows.match(/Name: zlib/g)).toHaveLength(1);
+  });
+
+  it("sanitizes zconf's FFmpeg HAVE_UNISTD_H probe before compiling with MSVC", async () => {
+    const root = await fixture();
+    await patch(root);
+    const build = path.join(
+      root,
+      "Telegram/build/prepare/enable_ffmpeg_apng.py",
+    );
+    const windows = path.join(
+      root,
+      "Telegram/build/patches/build_ffmpeg_win.sh",
+    );
+    const generated = spawnSync("python", [build, windows], { encoding: "utf8" });
+    expect(generated.status, generated.stderr).toBe(0);
+    const helper = path.join(
+      root,
+      "Telegram/build/patches/sanitize_zconf_msvc.py",
+    );
+    const header = path.join(root, "zconf.h");
+    await writeFile(header, `#if HAVE_UNISTD_H-0     /* may be set to #if 1 by ./configure */\n`, "utf8");
+
+    for (let pass = 0; pass < 2; pass++) {
+      const sanitized = spawnSync("python", [helper, header], { encoding: "utf8" });
+      expect(sanitized.status, sanitized.stderr).toBe(0);
+    }
+    const source = await readFile(header, "utf8");
+    expect(source).toContain("#if 0 /* Crossgram MSVC: no unistd.h */");
+    expect(source).not.toContain("#if HAVE_UNISTD_H-0");
   });
 
   it("moves the oversized MSVC archive object list into a make response file", async () => {
