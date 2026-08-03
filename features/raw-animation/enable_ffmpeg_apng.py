@@ -51,6 +51,23 @@ if after not in text:
 """,
     encoding="utf-8",
 )
+archive_install = (
+    "zlib_library=\n"
+    "for candidate in \\\n"
+    "    \"$FullScriptPath/../zlib/Release/libzs.lib\" \\\n"
+    "    \"$FullScriptPath/../zlib/Release/zlibstatic.lib\" \\\n"
+    "    \"$FullScriptPath/../zlib/Release/zlib.lib\"; do\n"
+    "    if [ -f \"$candidate\" ]; then zlib_library=\"$candidate\"; break; fi\n"
+    "done\n"
+    "if [ -z \"$zlib_library\" ]; then echo \"Windows zlib archive was not found\" >&2; exit 1; fi\n"
+    "install -m 0644 \"$zlib_library\" \"$FullScriptPath/../local/lib/zlib.lib\"\n"
+)
+legacy_archive_install = (
+    "install -m 0644 \"$FullScriptPath/../zlib/Release/libzs.lib\" "
+    "\"$FullScriptPath/../local/lib/zlib.lib\"\n"
+)
+if legacy_archive_install in text:
+    text = text.replace(legacy_archive_install, archive_install)
 text = insert_before(
     text,
     "./configure --prefix=",
@@ -60,7 +77,8 @@ text = insert_before(
     "install -m 0755 -d \"$FullScriptPath/../local/include\" \"$FullScriptPath/../local/lib\"\n"
     "install -m 0644 \"$FullScriptPath/../zlib/zlib.h\" \"$FullScriptPath/../local/include/zlib.h\"\n"
     "install -m 0644 \"$FullScriptPath/../zlib/zconf.h\" \"$FullScriptPath/../local/include/zconf.h\"\n"
-    "install -m 0644 \"$FullScriptPath/../zlib/Release/libzs.lib\" \"$FullScriptPath/../local/lib/zlib.lib\"\n\n",
+    + archive_install
+    + "\n",
 )
 text = insert_before(
     text,

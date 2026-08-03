@@ -201,6 +201,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     );
     expect(helper).toContain("build_ffmpeg_win.sh");
     expect(helper).toContain("../zlib/Release/libzs.lib");
+    expect(helper).toContain("../zlib/Release/zlibstatic.lib");
     expect(helper).toContain("../local/lib/zlib.lib");
     expect(helper).toContain("../local/lib/pkgconfig/zlib.pc");
     expect(helper).toContain('Libs: -L\\\\${libdir} -lz');
@@ -248,6 +249,8 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     const windows = await readFile(windowsBuild, "utf8");
     expect(windows.match(/--enable-zlib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/zlib\/Release\/libzs\.lib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/zlib\/Release\/zlibstatic\.lib/g)).toHaveLength(1);
+    expect(windows).toContain('install -m 0644 "$zlib_library"');
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
     expect(windows).toContain("Libs: -L\\${libdir} -lz");
@@ -293,6 +296,8 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     }
     const windows = await readFile(windowsBuild, "utf8");
     expect(windows.match(/\.\.\/zlib\/Release\/libzs\.lib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/zlib\/Release\/zlibstatic\.lib/g)).toHaveLength(1);
+    expect(windows).toContain('install -m 0644 "$zlib_library"');
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
     expect(windows).toContain("Libs: -L\\${libdir} -lz");
