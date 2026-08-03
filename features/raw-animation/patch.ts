@@ -254,4 +254,20 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
       "AV_PIX_FMT_FLAG_ALPHA",
     );
   });
+
+  await context.edit(`${sourceRoot}/ffmpeg/ffmpeg_frame_generator.cpp`, (file) => {
+    file.insertBefore(
+      `\tauto error = 0;
+\tif ((error = avformat_find_stream_info(_format.get(), nullptr))) {`,
+      `\t// A stale cache entry or a temporarily unavailable relay asset can
+\t// fail format probing. MakeFormatPointer returns null after logging the
+\t// FFmpeg error, so do not pass that null context back into libavformat.
+\tif (!_format) {
+\t\treturn;
+\t}
+
+`,
+      "do not pass that null context back into libavformat",
+    );
+  });
 }

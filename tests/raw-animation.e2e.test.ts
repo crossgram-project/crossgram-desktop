@@ -19,9 +19,11 @@ async function fixture(eol = "\n"): Promise<string> {
   roots.push(root);
   const data = path.join(root, "Telegram", "SourceFiles", "data");
   const clip = path.join(root, "Telegram", "SourceFiles", "media", "clip");
+  const ffmpeg = path.join(root, "Telegram", "SourceFiles", "ffmpeg");
   await Promise.all([
     mkdir(data, { recursive: true }),
     mkdir(clip, { recursive: true }),
+    mkdir(ffmpeg, { recursive: true }),
     mkdir(path.join(root, "Telegram", "build", "prepare"), { recursive: true }),
     mkdir(path.join(root, "Telegram", "build", "patches"), { recursive: true }),
     mkdir(path.join(root, "Telegram", "build", "docker", "centos_env"), { recursive: true }),
@@ -161,6 +163,24 @@ bool FFMpegReaderImplementation::renderFrame(
 	const auto bgra = (format == AV_PIX_FMT_BGRA);
 	hasAlpha = bgra || (format == AV_PIX_FMT_YUVA420P);
 	return true;
+}
+`.replaceAll("\n", eol),
+      "utf8",
+    ),
+    writeFile(
+      path.join(ffmpeg, "ffmpeg_frame_generator.cpp"),
+      `FrameGenerator::Impl::Impl(const QByteArray &bytes)
+: _bytes(bytes) {
+\t_format = MakeFormatPointer(
+\t\tstatic_cast<void*>(this),
+\t\t&FrameGenerator::Impl::Read,
+\t\tnullptr,
+\t\t&FrameGenerator::Impl::Seek);
+
+\tauto error = 0;
+\tif ((error = avformat_find_stream_info(_format.get(), nullptr))) {
+\t\treturn;
+\t}
 }
 `.replaceAll("\n", eol),
       "utf8",
@@ -477,5 +497,21 @@ make -j$NUMBER_OF_PROCESSORS
     expect(cpp).toContain("AV_PIX_FMT_FLAG_ALPHA");
     expect(header).toContain("#include <libavutil/pixdesc.h>");
     expect(cpp.match(/ignore_loop/g)).toHaveLength(1);
+  });
+
+  it("does not call avformat_find_stream_info after FFmpeg rejects cached bytes", async () => {
+    const root = await fixture();
+    await patch(root);
+    const cpp = await readFile(path.join(
+      root,
+      "Telegram/SourceFiles/ffmpeg/ffmpeg_frame_generator.cpp",
+    ), "utf8");
+
+    const guard = cpp.indexOf("if (!_format)");
+    const probe = cpp.indexOf("avformat_find_stream_info");
+    expect(guard).toBeGreaterThan(-1);
+    expect(probe).toBeGreaterThan(guard);
+    expect(cpp).toContain("do not pass that null context back into libavformat");
+    expect(cpp.match(/if \(!_format\)/g)).toHaveLength(1);
   });
 });
