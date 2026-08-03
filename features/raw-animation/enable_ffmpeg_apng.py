@@ -66,20 +66,32 @@ legacy_archive_install = (
     "install -m 0644 \"$FullScriptPath/../zlib/Release/libzs.lib\" "
     "\"$FullScriptPath/../local/lib/zlib.lib\"\n"
 )
+legacy_zconf_install = (
+    "install -m 0644 \"$FullScriptPath/../zlib/zconf.h\" "
+    "\"$FullScriptPath/../local/include/zconf.h\"\n"
+)
 if legacy_archive_install in text:
     text = text.replace(legacy_archive_install, archive_install)
-text = insert_before(
-    text,
-    "./configure --prefix=",
-    "# APNG and PNG decoders use FFmpeg's zlib inflate wrapper. The Windows\n"
-    "# dependency build keeps zlib outside the FFmpeg prefix, so expose the\n"
-    "# release headers and import library under the conventional -lz name.\n"
-    "install -m 0755 -d \"$FullScriptPath/../local/include\" \"$FullScriptPath/../local/lib\"\n"
-    "install -m 0644 \"$FullScriptPath/../zlib/zlib.h\" \"$FullScriptPath/../local/include/zlib.h\"\n"
-    "install -m 0644 \"$FullScriptPath/../zlib/zconf.h\" \"$FullScriptPath/../local/include/zconf.h\"\n"
-    + archive_install
-    + "\n",
-)
+if legacy_zconf_install in text:
+    text = text.replace(
+        legacy_zconf_install,
+        "install -m 0644 \"$FullScriptPath/../zlib/zconf.h.in\" "
+        "\"$FullScriptPath/../local/include/zconf.h\"\n",
+    )
+if archive_install.strip() not in text:
+    text = insert_before(
+        text,
+        "./configure --prefix=",
+        "# APNG and PNG decoders use FFmpeg's zlib inflate wrapper. The Windows\n"
+        "# dependency build keeps zlib outside the FFmpeg prefix, so expose the\n"
+        "# release headers and import library under the conventional -lz name.\n"
+        "install -m 0755 -d \"$FullScriptPath/../local/include\" \"$FullScriptPath/../local/lib\"\n"
+        "install -m 0644 \"$FullScriptPath/../zlib/zlib.h\" \"$FullScriptPath/../local/include/zlib.h\"\n"
+        "# Avoid CMake's MSYS unistd.h detection leaking into the MSVC build.\n"
+        "install -m 0644 \"$FullScriptPath/../zlib/zconf.h.in\" \"$FullScriptPath/../local/include/zconf.h\"\n"
+        + archive_install
+        + "\n",
+    )
 text = insert_before(
     text,
     "./configure --prefix=",
