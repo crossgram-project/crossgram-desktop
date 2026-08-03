@@ -106,7 +106,8 @@ bool DocumentData::isAnimation() const {
     ),
     writeFile(
       path.join(root, "Telegram", "build", "patches", "build_ffmpeg_win.sh"),
-      `        --enable-decoder=gif \\
+      `./configure --prefix=local \\
+        --enable-decoder=gif \\
         --enable-demuxer=gif \\
 `.replaceAll("\n", eol),
       "utf8",
@@ -197,6 +198,8 @@ describe("Desktop raw GIF/APNG animation patch", () => {
       'python "%ROOT_DIR%\\\\source\\\\Telegram\\\\build\\\\prepare\\\\enable_ffmpeg_apng.py"',
     );
     expect(helper).toContain("build_ffmpeg_win.sh");
+    expect(helper).toContain("../zlib/Release/libzs.lib");
+    expect(helper).toContain("../local/lib/z.lib");
     expect(prepare.match(/--enable-zlib/g)).toHaveLength(1);
     expect(prepare.match(/--enable-decoder=png/g)).toHaveLength(1);
     expect(prepare.match(/--enable-decoder=apng/g)).toHaveLength(1);
@@ -238,6 +241,8 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     }
     const windows = await readFile(windowsBuild, "utf8");
     expect(windows.match(/--enable-zlib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/zlib\/Release\/libzs\.lib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/local\/lib\/z\.lib/g)).toHaveLength(1);
     expect(windows.match(/--enable-decoder=png/g)).toHaveLength(1);
     expect(windows.match(/--enable-decoder=apng/g)).toHaveLength(1);
     expect(windows.match(/--enable-demuxer=apng/g)).toHaveLength(1);
@@ -277,6 +282,9 @@ describe("Desktop raw GIF/APNG animation patch", () => {
       expect(source.match(/--enable-decoder=apng/g)).toHaveLength(1);
       expect(source.match(/--enable-demuxer=apng/g)).toHaveLength(1);
     }
+    const windows = await readFile(windowsBuild, "utf8");
+    expect(windows.match(/\.\.\/zlib\/Release\/libzs\.lib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/local\/lib\/z\.lib/g)).toHaveLength(1);
   });
 
   it("keeps Animated attributes on stickers and custom reactions in the clip-reader path", async () => {
