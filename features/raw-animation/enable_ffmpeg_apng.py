@@ -35,7 +35,7 @@ text = insert_before(
     "install -m 0755 -d \"$FullScriptPath/../local/include\" \"$FullScriptPath/../local/lib\"\n"
     "install -m 0644 \"$FullScriptPath/../zlib/zlib.h\" \"$FullScriptPath/../local/include/zlib.h\"\n"
     "install -m 0644 \"$FullScriptPath/../zlib/zconf.h\" \"$FullScriptPath/../local/include/zconf.h\"\n"
-    "install -m 0644 \"$FullScriptPath/../zlib/Release/libzs.lib\" \"$FullScriptPath/../local/lib/z.lib\"\n\n",
+    "install -m 0644 \"$FullScriptPath/../zlib/Release/libzs.lib\" \"$FullScriptPath/../local/lib/zlib.lib\"\n\n",
 )
 text = insert_after(
     text,
