@@ -109,6 +109,8 @@ bool DocumentData::isAnimation() const {
       `./configure --prefix=local \\
         --enable-decoder=gif \\
         --enable-demuxer=gif \\
+
+make -j$NUMBER_OF_PROCESSORS
 `.replaceAll("\n", eol),
       "utf8",
     ),
@@ -200,6 +202,10 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(helper).toContain("build_ffmpeg_win.sh");
     expect(helper).toContain("../zlib/Release/libzs.lib");
     expect(helper).toContain("../local/lib/zlib.lib");
+    expect(helper).toContain("../local/lib/pkgconfig/zlib.pc");
+    expect(helper).toContain('Libs: -L\\\\${libdir} -lz');
+    expect(helper).toContain("enable_ffmpeg_msvc_archive.py");
+    expect(helper).toContain('$(file >$@.rsp,$^)');
     expect(prepare.match(/--enable-zlib/g)).toHaveLength(1);
     expect(prepare.match(/--enable-decoder=png/g)).toHaveLength(1);
     expect(prepare.match(/--enable-decoder=apng/g)).toHaveLength(1);
@@ -243,6 +249,9 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(windows.match(/--enable-zlib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/zlib\/Release\/libzs\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
+    expect(windows).toContain("Libs: -L\\${libdir} -lz");
+    expect(windows).toContain('python "$FullScriptPath/enable_ffmpeg_msvc_archive.py" ffbuild/library.mak');
     expect(windows.match(/--enable-decoder=png/g)).toHaveLength(1);
     expect(windows.match(/--enable-decoder=apng/g)).toHaveLength(1);
     expect(windows.match(/--enable-demuxer=apng/g)).toHaveLength(1);
@@ -285,6 +294,68 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     const windows = await readFile(windowsBuild, "utf8");
     expect(windows.match(/\.\.\/zlib\/Release\/libzs\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
+    expect(windows).toContain("Libs: -L\\${libdir} -lz");
+  });
+
+  it("adds pkg-config metadata to the previous zlib helper without duplicating imports", async () => {
+    const root = await fixture();
+    await patch(root);
+    const windowsBuild = path.join(root, "Telegram/build/prepare/../patches/build_ffmpeg_win.sh");
+    await writeFile(windowsBuild, `# APNG and PNG decoders use FFmpeg's zlib inflate wrapper. The Windows
+# dependency build keeps zlib outside the FFmpeg prefix, so expose the
+# release headers and import library under the conventional -lz name.
+install -m 0755 -d "$FullScriptPath/../local/include" "$FullScriptPath/../local/lib"
+install -m 0644 "$FullScriptPath/../zlib/zlib.h" "$FullScriptPath/../local/include/zlib.h"
+install -m 0644 "$FullScriptPath/../zlib/zconf.h" "$FullScriptPath/../local/include/zconf.h"
+install -m 0644 "$FullScriptPath/../zlib/Release/libzs.lib" "$FullScriptPath/../local/lib/zlib.lib"
+
+./configure --prefix=local \\
+        --enable-decoder=gif \\
+        --enable-zlib \\
+        --enable-decoder=png \\
+        --enable-decoder=apng \\
+        --enable-demuxer=gif \\
+        --enable-demuxer=apng \\
+
+make -j$NUMBER_OF_PROCESSORS
+`, "utf8");
+    const helper = path.join(root, "Telegram/build/prepare/enable_ffmpeg_apng.py");
+    for (let pass = 0; pass < 2; pass++) {
+      const applied = spawnSync("python", [helper, windowsBuild], { encoding: "utf8" });
+      expect(applied.status, applied.stderr).toBe(0);
+    }
+    const windows = await readFile(windowsBuild, "utf8");
+    expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
+    expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
+    expect(windows.match(/Name: zlib/g)).toHaveLength(1);
+  });
+
+  it("moves the oversized MSVC archive object list into a make response file", async () => {
+    const root = await fixture();
+    await patch(root);
+    const windowsBuild = path.join(root, "Telegram/build/prepare/../patches/build_ffmpeg_win.sh");
+    const helper = path.join(root, "Telegram/build/prepare/enable_ffmpeg_apng.py");
+    const applied = spawnSync("python", [helper, windowsBuild], { encoding: "utf8" });
+    expect(applied.status, applied.stderr).toBe(0);
+    const archiveHelper = path.join(
+      root,
+      "Telegram/build/prepare/../patches/enable_ffmpeg_msvc_archive.py",
+    );
+    const library = path.join(root, "ffbuild-library.mak");
+    await writeFile(library, `$(SUBDIR)$(LIBNAME): $(OBJS) $(STLIBOBJS)
+\t$(RM) $@
+\t$(AR) $(ARFLAGS) $(AR_O) $^
+\t$(RANLIB) $@
+`, "utf8");
+    for (let pass = 0; pass < 2; pass++) {
+      const patched = spawnSync("python", [archiveHelper, library], { encoding: "utf8" });
+      expect(patched.status, patched.stderr).toBe(0);
+    }
+    const recipe = await readFile(library, "utf8");
+    expect(recipe.match(/\$\(file >\$@\.rsp,\$\^\)/g)).toHaveLength(1);
+    expect(recipe).toContain("$(AR) $(ARFLAGS) $(AR_O) @$@.rsp");
+    expect(recipe).toContain("$(RM) $@.rsp");
   });
 
   it("keeps Animated attributes on stickers and custom reactions in the clip-reader path", async () => {
