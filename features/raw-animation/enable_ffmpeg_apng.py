@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enable the FFmpeg demuxer and decoders required by the APNG path."""
+"""Enable the FFmpeg demuxer, decoder, and inflate dependency for APNG."""
 
 from pathlib import Path
 import sys
@@ -18,6 +18,11 @@ if len(sys.argv) != 2:
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
+text = insert_after(
+    text,
+    "--enable-decoder=gif \\\n",
+    "        --enable-zlib \\\n",
+)
 text = insert_after(
     text,
     "--enable-decoder=gif \\\n",

@@ -178,7 +178,7 @@ async function patch(root: string): Promise<string> {
 }
 
 describe("Desktop raw GIF/APNG animation patch", () => {
-  it("enables the APNG demuxer and decoder in Windows, macOS, Linux, and Snap builds", async () => {
+  it("enables APNG demux, decode, and zlib inflate support in every FFmpeg build", async () => {
     const root = await fixture();
     await patch(root);
     const read = (relative: string) => readFile(path.join(root, relative), "utf8");
@@ -187,6 +187,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     const snap = await read("snap/snapcraft.yaml");
     const helper = await read("Telegram/build/prepare/enable_ffmpeg_apng.py");
     for (const source of [prepare, docker, snap]) {
+      expect(source).toContain("--enable-zlib");
       expect(source).toContain("--enable-decoder=png");
       expect(source).toContain("--enable-decoder=apng");
       expect(source).toContain("--enable-demuxer=apng");
@@ -196,10 +197,13 @@ describe("Desktop raw GIF/APNG animation patch", () => {
       'python "%ROOT_DIR%\\\\source\\\\Telegram\\\\build\\\\prepare\\\\enable_ffmpeg_apng.py"',
     );
     expect(helper).toContain("build_ffmpeg_win.sh");
+    expect(prepare.match(/--enable-zlib/g)).toHaveLength(1);
     expect(prepare.match(/--enable-decoder=png/g)).toHaveLength(1);
     expect(prepare.match(/--enable-decoder=apng/g)).toHaveLength(1);
     expect(docker.match(/--enable-decoder=apng/g)).toHaveLength(1);
     expect(snap.match(/--enable-decoder=apng/g)).toHaveLength(1);
+    expect(docker.match(/--enable-zlib/g)).toHaveLength(1);
+    expect(snap.match(/--enable-zlib/g)).toHaveLength(1);
     expect(docker.match(/--enable-demuxer=apng/g)).toHaveLength(1);
 
     const command = prepare.split(/\r?\n/).find((line) =>
@@ -233,9 +237,46 @@ describe("Desktop raw GIF/APNG animation patch", () => {
       expect(applied.status).toBe(0);
     }
     const windows = await readFile(windowsBuild, "utf8");
+    expect(windows.match(/--enable-zlib/g)).toHaveLength(1);
     expect(windows.match(/--enable-decoder=png/g)).toHaveLength(1);
     expect(windows.match(/--enable-decoder=apng/g)).toHaveLength(1);
     expect(windows.match(/--enable-demuxer=apng/g)).toHaveLength(1);
+  });
+
+  it("upgrades trees that already have APNG flags but still lack zlib", async () => {
+    const root = await fixture();
+    const files = [
+      "Telegram/build/prepare/prepare.py",
+      "Telegram/build/patches/build_ffmpeg_win.sh",
+      "Telegram/build/docker/centos_env/Dockerfile",
+    ];
+    for (const relative of files) {
+      const filename = path.join(root, relative);
+      const source = await readFile(filename, "utf8");
+      await writeFile(filename, source
+        .replace("--enable-decoder=gif \\", "--enable-decoder=gif \\\n        --enable-decoder=png \\\n        --enable-decoder=apng \\")
+        .replace("--enable-demuxer=gif \\", "--enable-demuxer=gif \\\n        --enable-demuxer=apng \\"), "utf8");
+    }
+    const snapPath = path.join(root, "snap/snapcraft.yaml");
+    const snap = await readFile(snapPath, "utf8");
+    await writeFile(snapPath, snap
+      .replace("      - --enable-decoder=gif", "      - --enable-decoder=gif\n      - --enable-decoder=png\n      - --enable-decoder=apng")
+      .replace("      - --enable-demuxer=gif", "      - --enable-demuxer=gif\n      - --enable-demuxer=apng"), "utf8");
+
+    await patch(root);
+    const windowsBuild = path.join(root, "Telegram/build/patches/build_ffmpeg_win.sh");
+    const helper = path.join(root, "Telegram/build/prepare/enable_ffmpeg_apng.py");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const applied = spawnSync("python", [helper, windowsBuild], { encoding: "utf8" });
+      if (applied.error) throw applied.error;
+      expect(applied.status).toBe(0);
+    }
+    for (const relative of [...files, "snap/snapcraft.yaml"]) {
+      const source = await readFile(path.join(root, relative), "utf8");
+      expect(source.match(/--enable-zlib/g)).toHaveLength(1);
+      expect(source.match(/--enable-decoder=apng/g)).toHaveLength(1);
+      expect(source.match(/--enable-demuxer=apng/g)).toHaveLength(1);
+    }
   });
 
   it("keeps Animated attributes on stickers and custom reactions in the clip-reader path", async () => {

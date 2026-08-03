@@ -25,6 +25,11 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   await context.edit("Telegram/build/prepare/prepare.py", (file) => {
     file.replacePattern(
       /^([ \t]+)--enable-decoder=gif \\$/m,
+      "$1--enable-decoder=gif \\\n$1--enable-zlib \\",
+      "--enable-zlib",
+    );
+    file.replacePattern(
+      /^([ \t]+)--enable-decoder=gif \\$/m,
       "$1--enable-decoder=gif \\\n$1--enable-decoder=png \\\n$1--enable-decoder=apng \\",
       "--enable-decoder=apng",
     );
@@ -44,6 +49,11 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   await context.edit("Telegram/build/docker/centos_env/Dockerfile", (file) => {
     file.replacePattern(
       /^([ \t]+)--enable-decoder=gif \\$/m,
+      "$1--enable-decoder=gif \\\n$1--enable-zlib \\",
+      "--enable-zlib",
+    );
+    file.replacePattern(
+      /^([ \t]+)--enable-decoder=gif \\$/m,
       "$1--enable-decoder=gif \\\n$1--enable-decoder=png \\\n$1--enable-decoder=apng \\",
       "--enable-decoder=apng",
     );
@@ -56,6 +66,11 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
 
   if (options.target.id !== "ayugram") {
     await context.edit("snap/snapcraft.yaml", (file) => {
+      file.insertAfter(
+        "      - --enable-decoder=gif",
+        "\n      - --enable-zlib",
+        "--enable-zlib",
+      );
       file.insertAfter(
         "      - --enable-decoder=gif",
         "\n      - --enable-decoder=png\n      - --enable-decoder=apng",
