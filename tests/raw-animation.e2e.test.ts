@@ -203,7 +203,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(helper).toContain("../zlib/Release/libzs.lib");
     expect(helper).toContain("../zlib/Release/zlibstatic.lib");
     expect(helper).toContain("../zlib/zconf.h.in");
-    expect(helper).toContain("Crossgram MSVC: no unistd.h");
+    expect(helper).toContain("Crossgram MSVC");
     expect(helper).toContain("re.compile");
     expect(helper).toContain("sanitize_zconf_msvc.py");
     expect(helper).toContain("../local/lib/zlib.lib");
@@ -348,7 +348,7 @@ make -j$NUMBER_OF_PROCESSORS
     expect(windows.match(/Name: zlib/g)).toHaveLength(1);
   });
 
-  it("disables zconf's unistd conditional without touching FFmpeg's global probe", async () => {
+  it("disables zconf's Windows unistd include gate without touching FFmpeg probes", async () => {
     const root = await fixture();
     await patch(root);
     const build = path.join(
@@ -366,9 +366,9 @@ make -j$NUMBER_OF_PROCESSORS
       "Telegram/build/patches/sanitize_zconf_msvc.py",
     );
     const variants = [
-      "#if HAVE_UNISTD_H-0     /* may be set to #if 1 by ./configure */\n",
-      "#if HAVE_UNISTD_H\n",
-      "#if 0 /* Crossgram MSVC: no unistd.h */\n",
+      "#if 0 /* CMake feature probe */\n#  if defined(Z_HAVE_UNISTD_H)\n#    include <unistd.h>\n",
+      "#if 0 /* CMake feature probe */\n#ifdef Z_HAVE_UNISTD_H\n# include <unistd.h>\n",
+      "#if 0 /* CMake feature probe */\n#  if defined(Z_HAVE_UNISTD_H) && !defined(_WIN32) /* Crossgram MSVC */\n# include <unistd.h>\n",
     ];
     for (const [index, source] of variants.entries()) {
       const header = path.join(root, `zconf-${index}.h`);
@@ -378,9 +378,8 @@ make -j$NUMBER_OF_PROCESSORS
         expect(sanitized.status, sanitized.stderr).toBe(0);
       }
       const staged = await readFile(header, "utf8");
-      expect(staged).toContain("#if 0 /* Crossgram MSVC: no unistd.h */");
-      expect(staged.match(/Crossgram MSVC: no unistd\.h/g)).toHaveLength(1);
-      expect(staged).not.toContain("#if HAVE_UNISTD_H");
+      expect(staged).toContain("defined(Z_HAVE_UNISTD_H) && !defined(_WIN32)");
+      expect(staged.match(/Crossgram MSVC/g)).toHaveLength(1);
     }
   });
 

@@ -2,7 +2,6 @@
 """Enable the FFmpeg demuxer, decoder, and inflate dependency for APNG."""
 
 from pathlib import Path
-import re
 import sys
 
 
@@ -64,13 +63,16 @@ if len(sys.argv) != 2:
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-safe = "#if 0 /* Crossgram MSVC: no unistd.h */"
+safe = "#  if defined(Z_HAVE_UNISTD_H) && !defined(_WIN32) /* Crossgram MSVC */"
 if safe not in text:
-    pattern = re.compile(r"(?m)^#if\\s+HAVE_UNISTD_H(?:\\s*-\\s*0)?(?:\\s*/\\*.*)?\\s*$")
+    pattern = re.compile(
+        r"(?m)^\\s*#\\s*(?:if\\s+defined\\(Z_HAVE_UNISTD_H\\)|ifdef\\s+Z_HAVE_UNISTD_H)"
+        r"(?=\\s*\\n\\s*#\\s*include\\s*<unistd\\.h>)"
+    )
     text, count = pattern.subn(safe, text)
     if count != 1:
         raise RuntimeError(
-            "expected one zconf HAVE_UNISTD_H conditional, found " + str(count)
+            "expected one zconf unistd include gate, found " + str(count)
         )
     path.write_text(text, encoding="utf-8")
 """,
