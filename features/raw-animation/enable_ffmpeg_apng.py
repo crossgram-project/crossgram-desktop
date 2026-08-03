@@ -2,6 +2,7 @@
 """Enable the FFmpeg demuxer, decoder, and inflate dependency for APNG."""
 
 from pathlib import Path
+import re
 import sys
 
 
@@ -55,6 +56,7 @@ zconf_helper = path.with_name("sanitize_zconf_msvc.py")
 zconf_helper.write_text(
     """#!/usr/bin/env python3
 from pathlib import Path
+import re
 import sys
 
 if len(sys.argv) != 2:
@@ -62,15 +64,15 @@ if len(sys.argv) != 2:
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
-guard = (
-    "/* Crossgram MSVC: FFmpeg's config.h may claim unistd.h exists. */\\n"
-    "#if defined(_WIN32)\\n"
-    "# undef HAVE_UNISTD_H\\n"
-    "# define HAVE_UNISTD_H 0\\n"
-    "#endif\\n\\n"
-)
-if guard not in text:
-    path.write_text(guard + text, encoding="utf-8")
+safe = "#if 0 /* Crossgram MSVC: no unistd.h */"
+if safe not in text:
+    pattern = re.compile(r"(?m)^#if\\s+HAVE_UNISTD_H(?:\\s*-\\s*0)?(?:\\s*/\\*.*)?\\s*$")
+    text, count = pattern.subn(safe, text)
+    if count != 1:
+        raise RuntimeError(
+            "expected one zconf HAVE_UNISTD_H conditional, found " + str(count)
+        )
+    path.write_text(text, encoding="utf-8")
 """,
     encoding="utf-8",
 )
@@ -100,6 +102,11 @@ zconf_msvc_sanitize = (
     "python \"$FullScriptPath/sanitize_zconf_msvc.py\" "
     "\"$FullScriptPath/../local/include/zconf.h\"\n"
 )
+configure_failure_log = (
+    "# Preserve FFmpeg's failed feature probes in the CI log.\n"
+    "trap 'status=$?; if [ \"$status\" -ne 0 ] && [ -f ffbuild/config.log ]; "
+    "then cat ffbuild/config.log >&2; fi; exit \"$status\"' ERR\n"
+)
 if legacy_archive_install in text:
     text = text.replace(legacy_archive_install, archive_install)
 if legacy_zconf_install in text:
@@ -126,6 +133,11 @@ text = insert_before(
     text,
     "./configure --prefix=",
     zconf_msvc_sanitize,
+)
+text = insert_before(
+    text,
+    "./configure --prefix=",
+    configure_failure_log,
 )
 text = insert_before(
     text,

@@ -203,8 +203,8 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(helper).toContain("../zlib/Release/libzs.lib");
     expect(helper).toContain("../zlib/Release/zlibstatic.lib");
     expect(helper).toContain("../zlib/zconf.h.in");
-    expect(helper).toContain("Crossgram MSVC: FFmpeg's config.h");
-    expect(helper).toContain("# define HAVE_UNISTD_H 0");
+    expect(helper).toContain("Crossgram MSVC: no unistd.h");
+    expect(helper).toContain("re.compile");
     expect(helper).toContain("sanitize_zconf_msvc.py");
     expect(helper).toContain("../local/lib/zlib.lib");
     expect(helper).toContain("../local/lib/pkgconfig/zlib.pc");
@@ -257,6 +257,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(windows.match(/\.\.\/zlib\/zconf\.h\.in/g)).toHaveLength(1);
     expect(windows).not.toContain('../zlib/zconf.h"');
     expect(windows).toContain("sanitize_zconf_msvc.py");
+    expect(windows).toContain("ffbuild/config.log");
     expect(windows).toContain('install -m 0644 "$zlib_library"');
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
@@ -307,6 +308,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(windows.match(/\.\.\/zlib\/zconf\.h\.in/g)).toHaveLength(1);
     expect(windows).not.toContain('../zlib/zconf.h"');
     expect(windows).toContain("sanitize_zconf_msvc.py");
+    expect(windows).toContain("ffbuild/config.log");
     expect(windows).toContain('install -m 0644 "$zlib_library"');
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
     expect(windows.match(/\.\.\/local\/lib\/pkgconfig\/zlib\.pc/g)).toHaveLength(1);
@@ -346,7 +348,7 @@ make -j$NUMBER_OF_PROCESSORS
     expect(windows.match(/Name: zlib/g)).toHaveLength(1);
   });
 
-  it("forces zconf's unistd probe off for MSVC without depending on its template", async () => {
+  it("disables zconf's unistd conditional without touching FFmpeg's global probe", async () => {
     const root = await fixture();
     await patch(root);
     const build = path.join(
@@ -366,7 +368,7 @@ make -j$NUMBER_OF_PROCESSORS
     const variants = [
       "#if HAVE_UNISTD_H-0     /* may be set to #if 1 by ./configure */\n",
       "#if HAVE_UNISTD_H\n",
-      "#if 0 /* already configured without unistd */\n",
+      "#if 0 /* Crossgram MSVC: no unistd.h */\n",
     ];
     for (const [index, source] of variants.entries()) {
       const header = path.join(root, `zconf-${index}.h`);
@@ -376,11 +378,9 @@ make -j$NUMBER_OF_PROCESSORS
         expect(sanitized.status, sanitized.stderr).toBe(0);
       }
       const staged = await readFile(header, "utf8");
-      expect(staged).toContain("#if defined(_WIN32)");
-      expect(staged).toContain("# undef HAVE_UNISTD_H");
-      expect(staged).toContain("# define HAVE_UNISTD_H 0");
-      expect(staged.match(/Crossgram MSVC: FFmpeg's config\.h/g)).toHaveLength(1);
-      expect(staged).toContain(source.trim());
+      expect(staged).toContain("#if 0 /* Crossgram MSVC: no unistd.h */");
+      expect(staged.match(/Crossgram MSVC: no unistd\.h/g)).toHaveLength(1);
+      expect(staged).not.toContain("#if HAVE_UNISTD_H");
     }
   });
 
