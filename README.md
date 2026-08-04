@@ -3,8 +3,9 @@
 This repository applies opt-in features to Telegram Desktop forks without using Git patch files. `server-switch` adds a per-account MTProto server selector to the sign-in UI, while `branding` gives generated applications independent names and platform identifiers. The separately enabled `e2e` feature exposes the Qt accessibility tree to authenticated local test drivers.
 
 For `bridge-media:` files, patched clients first call Crossgram's
-`crossgram.getFileUrl` RPC and download byte ranges directly over HTTP. Any RPC,
-expiry, or HTTP failure silently falls back to the original `upload.getFile`
+`crossgram.getFileUrl` RPC and start one normal HTTP transfer for the whole file.
+The existing part assembler reads from that shared transfer instead of issuing
+one HTTP request per `upload.getFile` part. Any RPC, expiry, or HTTP failure silently falls back to the original `upload.getFile`
 relay path. The download task exposes `crossgramDownloadTransport()` for
 diagnostics and logs `crossgram_download_transport=<direct|relay>`.
 

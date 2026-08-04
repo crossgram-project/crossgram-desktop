@@ -89,15 +89,19 @@ describe("Desktop direct-download patch e2e", () => {
     expect(cmake.match(/crossgram\/direct_download\.h/g)).toHaveLength(1);
   });
 
-  it("routes bridge media through HTTP Range and falls back on invalid responses", async () => {
+  it("routes bridge media through one normal HTTP transfer and falls back on failure", async () => {
     const { implementation, helper } = await patchedFixture();
-    expect(implementation).toContain('request.setRawHeader("Range", "bytes="');
+    expect(implementation).toContain("_directNetwork->get(request)");
+    expect(implementation.match(/_directNetwork->get\(request\)/g)).toHaveLength(1);
+    expect(implementation).toContain("std::make_unique<QTemporaryFile>()");
+    expect(implementation).toContain("deliverDirectParts();");
+    expect(implementation).not.toContain('request.setRawHeader("Range"');
+    expect(implementation).not.toContain("_directReplies");
     expect(implementation).toContain("return resolveDirectUrl(requestData, location);");
-    expect(implementation).toContain('LogTransport(u"direct"_q, u"url_resolved"_q)');
-    expect(implementation).toContain('LogTransport(u"relay"_q, u"http_range_failed"_q)');
-    expect(helper).toContain("status != 206");
-    expect(helper).toContain("end == offset + bytes.size() - 1");
-    expect(helper).toContain("total > end");
+    expect(implementation).toContain('LogTransport(u"direct"_q, u"http_transfer_resolved"_q)');
+    expect(implementation).toContain("fallbackDirectRequests(u\"http_transfer_failed\"_q)");
+    expect(helper).toContain("return status == 200;");
+    expect(helper).not.toContain("supportsRange");
   });
 
   it("offers raw stickers and reaction animations to the direct URL resolver", async () => {
@@ -108,12 +112,14 @@ describe("Desktop direct-download patch e2e", () => {
     expect(helper).toContain("fileReference.startsWith(kReactionPrefix)");
   });
 
-  it("exposes transport state, handles expired URL refresh failure, and cancels HTTP", async () => {
+  it("exposes transport state, coalesces URL resolution, and cancels the shared HTTP transfer", async () => {
     const { header, implementation } = await patchedFixture();
     expect(header).toContain("QString crossgramDownloadTransport() const;");
+    expect(header).toContain("QNetworkReply *_directReply = nullptr;");
     expect(implementation).toContain("_directUrlExpiresAt <= QDateTime::currentMSecsSinceEpoch()");
     expect(implementation).toContain("_directUrlExpiresAt = 0;");
-    expect(implementation).toContain("const auto direct = _directReplies.find(requestId);");
+    expect(implementation).toContain("if (_directResolving)");
+    expect(implementation).toContain("if (requestId < 0)");
     expect(implementation).toContain("reply->abort();");
   });
 });

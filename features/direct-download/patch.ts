@@ -31,7 +31,11 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
   });
 
   await context.edit(`${sourceRoot}/storage/download_manager_mtproto.h`, (file) => {
-    file.insertAfter("class ApiWrap;", "\nclass QNetworkAccessManager;\nclass QNetworkReply;", "class QNetworkAccessManager;");
+    file.insertAfter(
+      "class ApiWrap;",
+      "\nclass QNetworkAccessManager;\nclass QNetworkReply;\nclass QTemporaryFile;",
+      "class QNetworkAccessManager;",
+    );
     file.insertAfter(
       "\t[[nodiscard]] const Location &location() const;",
       "\n\t[[nodiscard]] QString crossgramDownloadTransport() const;",
@@ -46,7 +50,11 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
 	[[nodiscard]] mtpRequestId sendDirectRequest(const RequestData &requestData);
 	void directUrlResolved(const MTPDataJSON &result, mtpRequestId requestId);
 	void directUrlFailed(const MTP::Error &error, mtpRequestId requestId);
-	void directPartFinished(mtpRequestId requestId);`,
+	void startDirectTransfer();
+	void directTransferReadyRead();
+	void directTransferFinished();
+	void deliverDirectParts();
+	void fallbackDirectRequests(const QString &reason);`,
       "sendDirectRequest(const RequestData &requestData)",
     );
     file.insertAfter(
@@ -56,9 +64,13 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
 	QString _directUrl;
 	qint64 _directUrlExpiresAt = 0;
 	bool _directDisabled = false;
+	bool _directResolving = false;
 	mtpRequestId _nextDirectRequestId = -1;
 	std::unique_ptr<QNetworkAccessManager> _directNetwork;
-	base::flat_map<mtpRequestId, QNetworkReply*> _directReplies;`,
+	QNetworkReply *_directReply = nullptr;
+	std::unique_ptr<QTemporaryFile> _directCache;
+	qint64 _directDownloaded = 0;
+	bool _directFinished = false;`,
       "_nextDirectRequestId = -1",
     );
   });
@@ -70,6 +82,7 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
 #include "crossgram/direct_download.h"
 
 #include <QtCore/QDateTime>
+#include <QtCore/QTemporaryFile>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 #include <QtNetwork/QNetworkRequest>`,
@@ -104,21 +117,9 @@ mtpRequestId DownloadMtprotoTask::sendDirectRequest(const RequestData &requestDa
 		_directNetwork = std::make_unique<QNetworkAccessManager>();
 	}
 	const auto id = _nextDirectRequestId--;
-	auto request = QNetworkRequest(QUrl(_directUrl));
-	request.setRawHeader("Accept-Encoding", "identity");
-	request.setAttribute(
-		QNetworkRequest::RedirectPolicyAttribute,
-		QNetworkRequest::NoLessSafeRedirectPolicy);
-	request.setTransferTimeout(30 * 1000);
-	request.setRawHeader("Range", "bytes="
-		+ QByteArray::number(requestData.offset)
-		+ '-'
-		+ QByteArray::number(requestData.offset + kDownloadPartSize - 1));
-	const auto reply = _directNetwork->get(request);
-	_directReplies.emplace(id, reply);
-	QObject::connect(reply, &QNetworkReply::finished, [=] {
-		directPartFinished(id);
-	});
+	if (!_directReply && !_directFinished) {
+		startDirectTransfer();
+	}
 	return id;
 }
 
@@ -132,15 +133,20 @@ void DownloadMtprotoTask::directUrlResolved(
 	if (parsed && parsed->expiresAt > QDateTime::currentMSecsSinceEpoch()) {
 		_directUrl = parsed->url;
 		_directUrlExpiresAt = parsed->expiresAt;
-		Crossgram::DirectDownload::LogTransport(u"direct"_q, u"url_resolved"_q);
+		_directResolving = false;
+		Crossgram::DirectDownload::LogTransport(u"direct"_q, u"http_transfer_resolved"_q);
 	} else {
 		if (_directUrl.isEmpty()
 			|| _directUrlExpiresAt <= QDateTime::currentMSecsSinceEpoch()) {
 			_directDisabled = true;
+			_directResolving = false;
 			_directUrl.clear();
 			_directUrlExpiresAt = 0;
 			Crossgram::DirectDownload::LogTransport(u"relay"_q, u"invalid_rpc_response"_q);
 		}
+	}
+	if (_directDisabled) {
+		fallbackDirectRequests(u"invalid_rpc_response"_q);
 	}
 	makeRequest(requestData);
 }
@@ -152,43 +158,134 @@ void DownloadMtprotoTask::directUrlFailed(
 	if (_directUrl.isEmpty()
 		|| _directUrlExpiresAt <= QDateTime::currentMSecsSinceEpoch()) {
 		_directDisabled = true;
+		_directResolving = false;
 		_directUrl.clear();
 		_directUrlExpiresAt = 0;
-		Crossgram::DirectDownload::LogTransport(u"relay"_q, error.type());
 	}
+	fallbackDirectRequests(error.type());
 	makeRequest(requestData);
 }
 
-void DownloadMtprotoTask::directPartFinished(mtpRequestId requestId) {
-	const auto i = _directReplies.find(requestId);
-	if (i == end(_directReplies)) return;
-	const auto sent = _sentRequests.find(requestId);
-	if (sent == end(_sentRequests)) return;
-	const auto reply = i->second;
-	_directReplies.erase(i);
+void DownloadMtprotoTask::startDirectTransfer() {
+	if (_directReply || _directFinished) return;
+	_directCache = std::make_unique<QTemporaryFile>();
+	if (!_directCache->open()) {
+		_directFinished = true;
+		crl::on_main(this, [=] {
+			fallbackDirectRequests(u"http_cache_open_failed"_q);
+		});
+		return;
+	}
+	_directDownloaded = 0;
+	auto request = QNetworkRequest(QUrl(_directUrl));
+	request.setRawHeader("Accept-Encoding", "identity");
+	request.setAttribute(
+		QNetworkRequest::RedirectPolicyAttribute,
+		QNetworkRequest::NoLessSafeRedirectPolicy);
+	request.setTransferTimeout(30 * 1000);
+	_directReply = _directNetwork->get(request);
+	_directReply->setReadBufferSize(512 * 1024);
+	QObject::connect(_directReply, &QNetworkReply::readyRead, [=] {
+		directTransferReadyRead();
+	});
+	QObject::connect(_directReply, &QNetworkReply::finished, [=] {
+		directTransferFinished();
+	});
+}
+
+void DownloadMtprotoTask::directTransferReadyRead() {
+	if (!_directReply || !_directCache) return;
+	const auto bytes = _directReply->readAll();
+	if (bytes.isEmpty()) return;
+	if (!_directCache->seek(_directDownloaded)
+		|| _directCache->write(bytes) != bytes.size()) {
+		fallbackDirectRequests(u"http_cache_write_failed"_q);
+		return;
+	}
+	_directDownloaded += bytes.size();
+	deliverDirectParts();
+}
+
+void DownloadMtprotoTask::directTransferFinished() {
+	if (!_directReply) return;
+	const auto weak = base::make_weak(this);
+	directTransferReadyRead();
+	if (!weak || !_directReply) return;
+	const auto reply = base::take(_directReply);
 	const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-	const auto contentRange = reply->rawHeader("Content-Range");
-	const auto bytes = reply->readAll();
-	const auto networkOk = (reply->error() == QNetworkReply::NoError);
+	const auto valid = (reply->error() == QNetworkReply::NoError)
+		&& Crossgram::DirectDownload::ValidateHttpResponse(status);
 	reply->deleteLater();
-	const auto valid = networkOk
-		&& Crossgram::DirectDownload::ValidateRangeResponse(
-			status, contentRange, sent->second.offset, bytes)
-		&& (bytes.size() <= kDownloadPartSize);
-	const auto requestData = finishSentRequest(
-		requestId,
-		valid ? FinishRequestReason::Success : FinishRequestReason::Redirect);
-	if (valid) {
+	if (!valid) {
+		fallbackDirectRequests(u"http_transfer_failed"_q);
+		return;
+	}
+	_directFinished = true;
+	deliverDirectParts();
+}
+
+void DownloadMtprotoTask::deliverDirectParts() {
+	if (!_directCache) return;
+	auto ready = std::vector<mtpRequestId>();
+	for (const auto &[requestId, requestData] : _sentRequests) {
+		if (requestId >= 0) continue;
+		const auto available = std::max<int64>(0, _directDownloaded - requestData.offset);
+		if (available >= kDownloadPartSize || _directFinished) {
+			ready.push_back(requestId);
+		}
+	}
+	for (const auto requestId : ready) {
+		const auto i = _sentRequests.find(requestId);
+		if (i == end(_sentRequests)) continue;
+		const auto offset = i->second.offset;
+		const auto available = std::max<int64>(0, _directDownloaded - offset);
+		const auto size = int(std::min<int64>(kDownloadPartSize, available));
+		if (!_directCache->seek(offset)) {
+			fallbackDirectRequests(u"http_cache_seek_failed"_q);
+			return;
+		}
+		const auto bytes = _directCache->read(size);
+		if (bytes.size() != size) {
+			fallbackDirectRequests(u"http_cache_read_failed"_q);
+			return;
+		}
+		const auto requestData = finishSentRequest(requestId, FinishRequestReason::Success);
+		const auto weak = base::make_weak(this);
 		const auto owner = _owner;
 		const auto dc = dcId();
 		partLoaded(requestData.offset, bytes);
+		if (!weak) return;
 		owner->checkSendNextAfterSuccess(dc);
-		return;
+		if (!weak) return;
 	}
+}
+
+void DownloadMtprotoTask::fallbackDirectRequests(const QString &reason) {
 	_directDisabled = true;
+	_directResolving = false;
 	_directUrl.clear();
-	Crossgram::DirectDownload::LogTransport(u"relay"_q, u"http_range_failed"_q);
-	makeRequest(requestData);
+	_directUrlExpiresAt = 0;
+	_directFinished = false;
+	if (_directReply) {
+		const auto reply = base::take(_directReply);
+		QObject::disconnect(reply, nullptr, nullptr, nullptr);
+		reply->abort();
+		reply->deleteLater();
+	}
+	_directCache.reset();
+	_directDownloaded = 0;
+	auto retry = std::vector<RequestData>();
+	auto requestIds = std::vector<mtpRequestId>();
+	for (const auto &[requestId, requestData] : _sentRequests) {
+		if (requestId < 0) requestIds.push_back(requestId);
+	}
+	for (const auto requestId : requestIds) {
+		retry.push_back(finishSentRequest(requestId, FinishRequestReason::Redirect));
+	}
+	Crossgram::DirectDownload::LogTransport(u"relay"_q, reason);
+	for (const auto &requestData : retry) {
+		makeRequest(requestData);
+	}
 }`,
       "QString DownloadMtprotoTask::crossgramDownloadTransport() const",
     );
@@ -200,6 +297,10 @@ void DownloadMtprotoTask::directPartFinished(mtpRequestId requestId) {
 				&& _directUrlExpiresAt > QDateTime::currentMSecsSinceEpoch()) {
 				return sendDirectRequest(requestData);
 			}
+			if (_directResolving) {
+				return _nextDirectRequestId--;
+			}
+			_directResolving = true;
 			return resolveDirectUrl(requestData, location);
 		}
 		const auto reference = location.fileReference();`,
@@ -211,17 +312,15 @@ void DownloadMtprotoTask::directPartFinished(mtpRequestId requestId) {
 \tapi().request(requestId).cancel();`,
       `void DownloadMtprotoTask::cancelRequest(mtpRequestId requestId) {
 	const auto hashes = (_cdnHashesRequestId == requestId);
-	const auto direct = _directReplies.find(requestId);
-	if (direct != end(_directReplies)) {
-		const auto reply = direct->second;
-		_directReplies.erase(direct);
-		QObject::disconnect(reply, nullptr, nullptr, nullptr);
-		reply->abort();
-		reply->deleteLater();
+	if (requestId < 0) {
+		[[maybe_unused]] const auto data = finishSentRequest(
+			requestId,
+			FinishRequestReason::Cancel);
+		return;
 	} else {
 		api().request(requestId).cancel();
 	}`,
-      "const auto direct = _directReplies.find(requestId);",
+      "if (requestId < 0)",
     );
   });
 }
