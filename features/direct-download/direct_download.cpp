@@ -42,8 +42,14 @@ std::optional<ResolvedUrl> ParseResolvedUrl(const QByteArray &json) {
 	return ResolvedUrl{ url, expiresAt };
 }
 
-bool ValidateHttpResponse(int status) {
-	return status == 200;
+bool ValidateHttpResponse(
+		int status,
+		const QByteArray &contentRange,
+		qint64 offset) {
+	if (offset == 0 && status == 200) return true;
+	if (status != 206) return false;
+	const auto prefix = "bytes " + QByteArray::number(offset) + '-';
+	return contentRange.toLower().startsWith(prefix);
 }
 
 void LogTransport(const QString &transport, const QString &reason) {

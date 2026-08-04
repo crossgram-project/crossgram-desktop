@@ -89,18 +89,22 @@ describe("Desktop direct-download patch e2e", () => {
     expect(cmake.match(/crossgram\/direct_download\.h/g)).toHaveLength(1);
   });
 
-  it("routes bridge media through one normal HTTP transfer and falls back on failure", async () => {
+  it("uses one HTTP transfer and resumes from Telegram's first missing offset", async () => {
     const { implementation, helper } = await patchedFixture();
     expect(implementation).toContain("_directNetwork->get(request)");
     expect(implementation.match(/_directNetwork->get\(request\)/g)).toHaveLength(1);
     expect(implementation).toContain("std::make_unique<QTemporaryFile>()");
     expect(implementation).toContain("deliverDirectParts();");
-    expect(implementation).not.toContain('request.setRawHeader("Range"');
+    expect(implementation).toContain('request.setRawHeader("Range", "bytes=" + QByteArray::number(offset) + \'-\')');
+    expect(implementation.match(/request\.setRawHeader\("Range"/g)).toHaveLength(1);
+    expect(implementation).not.toContain("requestData.offset + kDownloadPartSize - 1");
     expect(implementation).not.toContain("_directReplies");
     expect(implementation).toContain("return resolveDirectUrl(requestData, location);");
     expect(implementation).toContain('LogTransport(u"direct"_q, u"http_transfer_resolved"_q)');
     expect(implementation).toContain("fallbackDirectRequests(u\"http_transfer_failed\"_q)");
-    expect(helper).toContain("return status == 200;");
+    expect(helper).toContain("offset == 0 && status == 200");
+    expect(helper).toContain("status != 206");
+    expect(helper).toContain("contentRange.toLower().startsWith(prefix)");
     expect(helper).not.toContain("supportsRange");
   });
 

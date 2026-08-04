@@ -14,7 +14,10 @@ struct ResolvedUrl {
 
 [[nodiscard]] bool IsCandidate(const QByteArray &fileReference);
 [[nodiscard]] std::optional<ResolvedUrl> ParseResolvedUrl(const QByteArray &json);
-[[nodiscard]] bool ValidateHttpResponse(int status);
+[[nodiscard]] bool ValidateHttpResponse(
+	int status,
+	const QByteArray &contentRange,
+	qint64 offset);
 void LogTransport(const QString &transport, const QString &reason);
 
 } // namespace Crossgram::DirectDownload

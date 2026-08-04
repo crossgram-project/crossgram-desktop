@@ -50,7 +50,7 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
 	[[nodiscard]] mtpRequestId sendDirectRequest(const RequestData &requestData);
 	void directUrlResolved(const MTPDataJSON &result, mtpRequestId requestId);
 	void directUrlFailed(const MTP::Error &error, mtpRequestId requestId);
-	void startDirectTransfer();
+	void startDirectTransfer(int64 offset);
 	void directTransferReadyRead();
 	void directTransferFinished();
 	void deliverDirectParts();
@@ -69,6 +69,7 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
 	std::unique_ptr<QNetworkAccessManager> _directNetwork;
 	QNetworkReply *_directReply = nullptr;
 	std::unique_ptr<QTemporaryFile> _directCache;
+	qint64 _directBaseOffset = 0;
 	qint64 _directDownloaded = 0;
 	bool _directFinished = false;`,
       "_nextDirectRequestId = -1",
@@ -118,7 +119,15 @@ mtpRequestId DownloadMtprotoTask::sendDirectRequest(const RequestData &requestDa
 	}
 	const auto id = _nextDirectRequestId--;
 	if (!_directReply && !_directFinished) {
-		startDirectTransfer();
+		auto offset = requestData.offset;
+		for (const auto &[requestId, sent] : _sentRequests) {
+			if (requestId < 0) offset = std::min(offset, sent.offset);
+		}
+		startDirectTransfer(offset);
+	} else if (requestData.offset < _directBaseOffset) {
+		crl::on_main(this, [=] {
+			fallbackDirectRequests(u"http_resume_moved_backwards"_q);
+		});
 	}
 	return id;
 }
@@ -166,7 +175,7 @@ void DownloadMtprotoTask::directUrlFailed(
 	makeRequest(requestData);
 }
 
-void DownloadMtprotoTask::startDirectTransfer() {
+void DownloadMtprotoTask::startDirectTransfer(int64 offset) {
 	if (_directReply || _directFinished) return;
 	_directCache = std::make_unique<QTemporaryFile>();
 	if (!_directCache->open()) {
@@ -176,13 +185,17 @@ void DownloadMtprotoTask::startDirectTransfer() {
 		});
 		return;
 	}
-	_directDownloaded = 0;
+	_directBaseOffset = offset;
+	_directDownloaded = offset;
 	auto request = QNetworkRequest(QUrl(_directUrl));
 	request.setRawHeader("Accept-Encoding", "identity");
 	request.setAttribute(
 		QNetworkRequest::RedirectPolicyAttribute,
 		QNetworkRequest::NoLessSafeRedirectPolicy);
 	request.setTransferTimeout(30 * 1000);
+	if (offset > 0) {
+		request.setRawHeader("Range", "bytes=" + QByteArray::number(offset) + '-');
+	}
 	_directReply = _directNetwork->get(request);
 	_directReply->setReadBufferSize(512 * 1024);
 	QObject::connect(_directReply, &QNetworkReply::readyRead, [=] {
@@ -197,7 +210,7 @@ void DownloadMtprotoTask::directTransferReadyRead() {
 	if (!_directReply || !_directCache) return;
 	const auto bytes = _directReply->readAll();
 	if (bytes.isEmpty()) return;
-	if (!_directCache->seek(_directDownloaded)
+	if (!_directCache->seek(_directDownloaded - _directBaseOffset)
 		|| _directCache->write(bytes) != bytes.size()) {
 		fallbackDirectRequests(u"http_cache_write_failed"_q);
 		return;
@@ -213,8 +226,10 @@ void DownloadMtprotoTask::directTransferFinished() {
 	if (!weak || !_directReply) return;
 	const auto reply = base::take(_directReply);
 	const auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+	const auto contentRange = reply->rawHeader("Content-Range");
 	const auto valid = (reply->error() == QNetworkReply::NoError)
-		&& Crossgram::DirectDownload::ValidateHttpResponse(status);
+		&& Crossgram::DirectDownload::ValidateHttpResponse(
+			status, contentRange, _directBaseOffset);
 	reply->deleteLater();
 	if (!valid) {
 		fallbackDirectRequests(u"http_transfer_failed"_q);
@@ -229,6 +244,10 @@ void DownloadMtprotoTask::deliverDirectParts() {
 	auto ready = std::vector<mtpRequestId>();
 	for (const auto &[requestId, requestData] : _sentRequests) {
 		if (requestId >= 0) continue;
+		if (requestData.offset < _directBaseOffset) {
+			fallbackDirectRequests(u"http_resume_moved_backwards"_q);
+			return;
+		}
 		const auto available = std::max<int64>(0, _directDownloaded - requestData.offset);
 		if (available >= kDownloadPartSize || _directFinished) {
 			ready.push_back(requestId);
@@ -240,7 +259,7 @@ void DownloadMtprotoTask::deliverDirectParts() {
 		const auto offset = i->second.offset;
 		const auto available = std::max<int64>(0, _directDownloaded - offset);
 		const auto size = int(std::min<int64>(kDownloadPartSize, available));
-		if (!_directCache->seek(offset)) {
+		if (!_directCache->seek(offset - _directBaseOffset)) {
 			fallbackDirectRequests(u"http_cache_seek_failed"_q);
 			return;
 		}
@@ -273,6 +292,7 @@ void DownloadMtprotoTask::fallbackDirectRequests(const QString &reason) {
 		reply->deleteLater();
 	}
 	_directCache.reset();
+	_directBaseOffset = 0;
 	_directDownloaded = 0;
 	auto retry = std::vector<RequestData>();
 	auto requestIds = std::vector<mtpRequestId>();

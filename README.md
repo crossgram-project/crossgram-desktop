@@ -9,6 +9,10 @@ one HTTP request per `upload.getFile` part. Any RPC, expiry, or HTTP failure sil
 relay path. The download task exposes `crossgramDownloadTransport()` for
 diagnostics and logs `crossgram_download_transport=<direct|relay>`.
 
+When Telegram already has a partial file, the one shared transfer starts with a
+single open-ended `Range: bytes=<first-missing-offset>-` request. Fresh downloads
+use a normal GET; neither path creates one HTTP request per 128 KiB part.
+
 The same direct HTTP path is used for `bridge-sticker:` and
 `bridge-reaction-resource:` documents. Original PNG, GIF, and APNG assets are
 kept in their source format: animated image documents use the upstream
