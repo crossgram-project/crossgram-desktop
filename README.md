@@ -62,7 +62,7 @@ The patcher performs unique, structural edits around C++ function bodies, declar
 
 ## Build branding
 
-Default builds use `CrossTelegram`, `Cross64Gram`, `CrossAyuGram`, or `CrossMaterialgram` and append `.crossgram` to the upstream platform identifier. The additional Telegram Desktop themes are:
+Default builds use `CrossTelegram`, `Cross64Gram`, `CrossAyuGram`, or `CrossMaterialgram` and append `.crossgram` to the upstream platform identifier. Every supported upstream also ships these themed brands:
 
 - `QQ · Cross` / `.crossgram.qq`
 - `微信 · Cross` / `.crossgram.wechat`
@@ -113,9 +113,9 @@ tdata/<account-hash>/server-switch.json
 
 ## CI and releases
 
-[`check.yml`](.github/workflows/check.yml) resolves and patches all four latest upstream releases plus the five Telegram Desktop themes in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
+[`check.yml`](.github/workflows/check.yml) resolves and patches all 24 target/brand combinations in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
 
-[`release.yml`](.github/workflows/release.yml) builds 9 target/brand combinations × 3 platforms for Windows, Linux, and macOS. Each workflow run publishes every successful target, brand, and platform into one unified `Crossgram Desktop #<run-number>` release, matching the Android release model. One job's failure does not prevent the other successful builds from being published.
+[`release.yml`](.github/workflows/release.yml) runs one build job per target/platform and incrementally packages all six brands, producing 24 target/brand combinations across Windows, Linux, and macOS. Each workflow run publishes every successful target, brand, and platform into one unified `Crossgram Desktop #<run-number>` release, matching the Android release model. One job's failure does not prevent the other successful builds from being published.
 
 User archives contain stripped production binaries built with `NDEBUG` and `QT_NO_DEBUG`. Debug information is kept out of those archives and published as separate `*.symbols.*` assets: PDB files on Windows, split debug files on Linux, and dSYM bundles on macOS.
 

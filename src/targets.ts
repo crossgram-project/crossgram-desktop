@@ -56,7 +56,7 @@ export const targets: readonly Target[] = [
     apiHash: CROSSGRAM_TELEGRAM_API_HASH,
     desktopFile: "com.ayugram.desktop.desktop",
     linuxIconId: "com.ayugram.desktop",
-    macIconSet: "AppIcon.appiconset",
+    macIconSet: "Icon.appiconset",
   },
   {
     id: "materialgram",
@@ -68,7 +68,7 @@ export const targets: readonly Target[] = [
     apiHash: CROSSGRAM_TELEGRAM_API_HASH,
     desktopFile: "io.github.kukuruzka165.materialgram.desktop",
     linuxIconId: "io.github.kukuruzka165.materialgram",
-    macIconSet: "AppIcon.appiconset",
+    macIconSet: "Icon.appiconset",
   },
 ] as const;
 

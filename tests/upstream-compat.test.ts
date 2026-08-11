@@ -32,7 +32,7 @@ async function fixture(eol = "\n"): Promise<string> {
   return root;
 }
 
-describe("64Gram upstream compatibility", () => {
+describe("upstream compatibility", () => {
   it("renames every Qt/libcbor collision for Windows and is idempotent", async () => {
     const root = await fixture();
     const options = { root, target: targetById("tdesktop-x64") };
@@ -71,6 +71,38 @@ describe("64Gram upstream compatibility", () => {
     expect(source.replaceAll("\r\n", "")).not.toContain("\n");
   });
 
+
+  it("replaces AyuGram's missing generated language symbol", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-ayugram-compat-"));
+    temporaryDirectories.push(root);
+    await mkdir(path.join(root, "Telegram/SourceFiles/ayu"), { recursive: true });
+    const handlerPath = path.join(
+      root,
+      "Telegram/SourceFiles/ayu/ayu_url_handlers.cpp",
+    );
+    await writeFile(
+      handlerPath,
+      [
+        "void ResolveUser() {",
+        "\tUi::show(Ui::MakeInformBox(tr::ayu_UserNotFoundMessage()));",
+        "}",
+        "void ResolveChat() {",
+        "\tUi::show(Ui::MakeInformBox(tr::ayu_UserNotFoundMessage()));",
+        "}",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const options = { root, target: targetById("ayugram") };
+    await patchUpstreamCompatibility(options);
+    const first = await readFile(handlerPath, "utf8");
+    expect(first).not.toContain("ayu_UserNotFoundMessage");
+    expect(first.match(/lng_blocked_list_not_found\(tr::now\)/g)).toHaveLength(2);
+
+    await patchUpstreamCompatibility(options);
+    expect(await readFile(handlerPath, "utf8")).toBe(first);
+  });
   it("does not touch upstreams that do not vendor 64Gram's libfido2", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-upstream-compat-none-"));
     temporaryDirectories.push(root);

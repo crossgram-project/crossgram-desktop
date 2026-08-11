@@ -27,6 +27,12 @@ describe("targets", () => {
     expect(() => targetById("unknown")).toThrow(/Unknown target/);
   });
 
+  it("uses the current macOS icon set in every upstream", () => {
+    expect(targets.map(({ macIconSet }) => macIconSet)).toEqual(
+      targets.map(() => "Icon.appiconset"),
+    );
+  });
+
   it("uses the Crossgram Telegram API identity for every client target", () => {
     expect(CROSSGRAM_TELEGRAM_API_ID).toBe(24862414);
     expect(CROSSGRAM_TELEGRAM_API_HASH).toBe(
@@ -45,19 +51,29 @@ describe("targets", () => {
       readFile(resolve(repositoryRoot, ".github/workflows/check.yml"), "utf8"),
       readFile(resolve(repositoryRoot, ".github/workflows/release.yml"), "utf8"),
     ]);
-    const expected = [
-      ...targets.map(({ id }) => `${id}/cross`),
-      "tdesktop/qq",
-      "tdesktop/wechat",
-      "tdesktop/wecom",
-      "tdesktop/dingtalk",
-      "tdesktop/discord",
-    ];
-    const matrixBuilds = (workflow: string) =>
-      [...workflow.matchAll(/^\s+- target: (\S+)\r?\n\s+brand: (\S+)$/gm)]
-        .map((match) => `${match[1]}/${match[2]}`);
-    expect(matrixBuilds(check)).toEqual(expected);
-    expect(matrixBuilds(release).sort()).toEqual([...expected].sort());
+    const expected = targets.flatMap(({ id }) => [
+      "cross",
+      "qq",
+      "wechat",
+      "wecom",
+      "dingtalk",
+      "discord",
+    ].map((brand) => `${id}/${brand}`));
+    expect(
+      [...check.matchAll(/^\s+- target: (\S+)\r?\n\s+brand: (\S+)$/gm)]
+        .map((match) => `${match[1]}/${match[2]}`),
+    ).toEqual(expected);
+
+    const releaseTargets = [...release.matchAll(
+      /^\s+- target: (\S+)\r?\n\s+repository: \S+\r?\n\s+brands: '(\[[^']+\])'$/gm,
+    )].map((match) => ({
+      target: match[1],
+      brands: JSON.parse(match[2] ?? "[]") as string[],
+    }));
+    expect(releaseTargets).toEqual(targets.map(({ id }) => ({
+      target: id,
+      brands: ["cross", "qq", "wechat", "wecom", "dingtalk", "discord"],
+    })));
     expect(release).toContain("name: Publish one unified release");
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
     expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");
@@ -75,12 +91,14 @@ describe("targets", () => {
     );
     expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
     expect(release).toContain("matrix.platform == 'windows' && 'windows-latest'");
-    expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(9);
-    expect(release).toContain("matrix.build.target }} / ${{ matrix.build.brand }} / ${{ matrix.platform");
-    expect(release).toContain("crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}--${{ matrix.platform }}");
+    expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(4);
+    expect(release).toContain("matrix.build.target }} / ${{ matrix.platform");
+    expect(release).toContain("crossgram-${{ matrix.build.target }}--${{ matrix.platform");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
+    expect(release).toContain("AVAILABLE_BRANDS: ${{ matrix.build.brands }}");
+    expect(release).not.toContain("${{ matrix.build.brand }}");
     expect(release).toContain("-Wno-error=install-absolute-destination");
     expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");
     expect(release).toContain("CMAKE_INSTALL_DATADIR");

@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   build:
-    name: ${{ matrix.build.target }} / ${{ matrix.build.brand }} / ${{ matrix.platform }}
+    name: ${{ matrix.build.target }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -50,40 +50,20 @@ jobs:
         platform: ${{ fromJSON(inputs.platforms == 'windows-linux' && '["windows","linux"]' || inputs.platforms == 'windows' && '["windows"]' || inputs.platforms == 'linux' && '["linux"]' || inputs.platforms == 'macos' && '["macos"]' || '["windows","linux","macos"]') }}
         build:
           - target: tdesktop
-            brand: cross
             repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: qq
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: wechat
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: wecom
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: dingtalk
-            repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
-          - target: tdesktop
-            brand: discord
-            repository: telegramdesktop/tdesktop
+            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
           - target: tdesktop-x64
-            brand: cross
             repository: TDesktop-x64/tdesktop
+            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
           - target: ayugram
-            brand: cross
             repository: AyuGram/AyuGramDesktop
+            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
           - target: materialgram
-            brand: cross
             repository: kukuruzka165/materialgram
+            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
     steps:
       - name: Check out patcher
@@ -109,7 +89,7 @@ jobs:
         env:
           TARGET_FILTER: ${{ inputs.target }}
           MATRIX_TARGET: ${{ matrix.build.target }}
-          MATRIX_BRAND: ${{ matrix.build.brand }}
+          AVAILABLE_BRANDS: ${{ matrix.build.brands }}
           BRAND_FILTER: ${{ inputs.brands }}
         run: |
           if [ -n "$TARGET_FILTER" ] && [ "$TARGET_FILTER" != all ] && [ "$TARGET_FILTER" != "$MATRIX_TARGET" ]; then
@@ -117,18 +97,21 @@ jobs:
             echo 'brands=[]' >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          brands="$AVAILABLE_BRANDS"
           if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
-            case ",$BRAND_FILTER," in
-              *",$MATRIX_BRAND,"*) ;;
-              *)
-                echo "needed=false" >> "$GITHUB_OUTPUT"
-                echo 'brands=[]' >> "$GITHUB_OUTPUT"
-                exit 0
-                ;;
-            esac
+            requested="$(jq -cn --arg csv "$BRAND_FILTER" '$csv | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')"
+            brands="$(jq -cn \
+              --argjson available "$AVAILABLE_BRANDS" \
+              --argjson requested "$requested" \
+              '$available | map(select(. as $brand | $requested | index($brand)))')"
+          fi
+          if [ "$(jq 'length' <<<"$brands")" -eq 0 ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo 'brands=[]' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           echo "needed=true" >> "$GITHUB_OUTPUT"
-          echo "brands=$(jq -cn --arg brand "$MATRIX_BRAND" '[$brand]')" >> "$GITHUB_OUTPUT"
+          echo "brands=$brands" >> "$GITHUB_OUTPUT"
 
       - name: Check out upstream
         if: steps.plan.outputs.needed == 'true'
@@ -632,7 +615,7 @@ jobs:
         if: always() && steps.plan.outputs.needed == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: crossgram-${{ matrix.build.target }}-${{ matrix.build.brand }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
+          name: crossgram-${{ matrix.build.target }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
           path: artifacts/crossgram-*
           if-no-files-found: warn
           retention-days: 14

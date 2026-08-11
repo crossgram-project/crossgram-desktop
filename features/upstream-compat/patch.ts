@@ -16,9 +16,20 @@ export const qtLibcborCollisions = [
 ] as const;
 
 export async function patchUpstreamCompatibility(options: PatchOptions): Promise<void> {
+  const context = new PatchContext(options.root, options.target, options.root);
+
+  if (options.target.id === "ayugram") {
+    await context.edit("Telegram/SourceFiles/ayu/ayu_url_handlers.cpp", (file) => {
+      file.replaceEvery(
+        "tr::ayu_UserNotFoundMessage()",
+        "tr::lng_blocked_list_not_found(tr::now)",
+      );
+    });
+    return;
+  }
+
   if (options.target.id !== "tdesktop-x64") return;
 
-  const context = new PatchContext(options.root, options.target, options.root);
   const definitions = qtLibcborCollisions
     .map((symbol) => `        ${symbol}=${libcborPrefix}${symbol.slice("cbor_".length)}`)
     .join("\n");

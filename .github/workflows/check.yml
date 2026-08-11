@@ -22,15 +22,6 @@ jobs:
           - target: tdesktop
             brand: cross
             repository: telegramdesktop/tdesktop
-          - target: tdesktop-x64
-            brand: cross
-            repository: TDesktop-x64/tdesktop
-          - target: ayugram
-            brand: cross
-            repository: AyuGram/AyuGramDesktop
-          - target: materialgram
-            brand: cross
-            repository: kukuruzka165/materialgram
           - target: tdesktop
             brand: qq
             repository: telegramdesktop/tdesktop
@@ -46,6 +37,60 @@ jobs:
           - target: tdesktop
             brand: discord
             repository: telegramdesktop/tdesktop
+          - target: tdesktop-x64
+            brand: cross
+            repository: TDesktop-x64/tdesktop
+          - target: tdesktop-x64
+            brand: qq
+            repository: TDesktop-x64/tdesktop
+          - target: tdesktop-x64
+            brand: wechat
+            repository: TDesktop-x64/tdesktop
+          - target: tdesktop-x64
+            brand: wecom
+            repository: TDesktop-x64/tdesktop
+          - target: tdesktop-x64
+            brand: dingtalk
+            repository: TDesktop-x64/tdesktop
+          - target: tdesktop-x64
+            brand: discord
+            repository: TDesktop-x64/tdesktop
+          - target: ayugram
+            brand: cross
+            repository: AyuGram/AyuGramDesktop
+          - target: ayugram
+            brand: qq
+            repository: AyuGram/AyuGramDesktop
+          - target: ayugram
+            brand: wechat
+            repository: AyuGram/AyuGramDesktop
+          - target: ayugram
+            brand: wecom
+            repository: AyuGram/AyuGramDesktop
+          - target: ayugram
+            brand: dingtalk
+            repository: AyuGram/AyuGramDesktop
+          - target: ayugram
+            brand: discord
+            repository: AyuGram/AyuGramDesktop
+          - target: materialgram
+            brand: cross
+            repository: kukuruzka165/materialgram
+          - target: materialgram
+            brand: qq
+            repository: kukuruzka165/materialgram
+          - target: materialgram
+            brand: wechat
+            repository: kukuruzka165/materialgram
+          - target: materialgram
+            brand: wecom
+            repository: kukuruzka165/materialgram
+          - target: materialgram
+            brand: dingtalk
+            repository: kukuruzka165/materialgram
+          - target: materialgram
+            brand: discord
+            repository: kukuruzka165/materialgram
     steps:
       - name: Check out patcher
         uses: actions/checkout@v7

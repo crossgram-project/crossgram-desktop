@@ -121,6 +121,14 @@ export async function patchServerSwitch(options: PatchOptions): Promise<void> {
     );
   });
 
+  await context.edit(`${sourceRoot}/storage/storage_account.cpp`, (file) => {
+    file.insertAfter(
+      '\t\t"configs",',
+      '\n\t\t"server-switch.json",',
+      '"server-switch.json",',
+    );
+  });
+
   await context.edit(`${sourceRoot}/main/main_account.h`, (file) => {
     file.insertAfter(
       "\tvoid destroyStaleAuthorizationKeys();",
