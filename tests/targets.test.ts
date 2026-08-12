@@ -104,7 +104,7 @@ describe("targets", () => {
     expect(release).toContain("CMAKE_INSTALL_DATADIR");
     expect(release).toContain("-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib");
     expect(release).toContain(
-      "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FULL /OPT:REF /OPT:ICF",
+      "-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FASTLINK /OPT:REF /OPT:ICF",
     );
     expect(release).toContain("group: crossgram-desktop-upstream-release");
     expect(release).toContain("Both API overrides are required");
@@ -112,7 +112,7 @@ describe("targets", () => {
     expect(release).toContain("'-GNinja Multi-Config'");
     expect(release).toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded");
     expect(release).not.toContain("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase");
-    expect(release).toContain("$env:_LINK_ = '/DEBUG:FULL /OPT:REF /OPT:ICF'");
+    expect(release).toContain("$env:_LINK_ = '/DEBUG:FASTLINK /OPT:REF /OPT:ICF'");
     expect(release).toContain("$symbolRoot = Join-Path $source 'out'");
     expect(release).toContain('-Filter "$($metadata.executable).pdb" -File -Recurse');
     expect(release).toContain("-Filter '*.pdb' -File -Recurse");
