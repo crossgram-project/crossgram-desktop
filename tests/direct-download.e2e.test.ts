@@ -18,6 +18,7 @@ async function fixture(): Promise<string> {
   roots.push(root);
   const source = path.join(root, "Telegram", "SourceFiles");
   await Promise.all([
+    mkdir(path.join(source, "data"), { recursive: true }),
     mkdir(path.join(source, "mtproto", "scheme"), { recursive: true }),
     mkdir(path.join(source, "storage"), { recursive: true }),
   ]);
@@ -53,6 +54,21 @@ void DownloadMtprotoTask::cancelRequest(mtpRequestId requestId) {
 \tapi().request(requestId).cancel();
 }
 `, "utf8");
+  await writeFile(path.join(source, "data", "data_cloud_file.cpp"), `void LoadCloudFile(
+\tCloudFile &file,
+\tFn<bool()> finalCheck,
+\tFn<void(bool)> fail) {
+\tif (file.loader) {
+\t\treturn;
+\t} else if ((file.flags & CloudFile::Flag::Failed)
+\t\t|| !file.location.valid()
+\t\t|| (finalCheck && !finalCheck())) {
+\t\treturn;
+\t}
+\tfile.flags &= ~CloudFile::Flag::Cancelled;
+\tfile.loader = CreateFileLoader();
+}
+`, "utf8");
   return root;
 }
 
@@ -62,6 +78,7 @@ async function patchedFixture(): Promise<{
   header: string;
   implementation: string;
   helper: string;
+  cloudFile: string;
 }> {
   const root = await fixture();
   const options = {
@@ -78,6 +95,7 @@ async function patchedFixture(): Promise<{
     header: await readSource("Telegram/SourceFiles/storage/download_manager_mtproto.h"),
     implementation: await readSource("Telegram/SourceFiles/storage/download_manager_mtproto.cpp"),
     helper: await readSource("Telegram/SourceFiles/crossgram/direct_download.cpp"),
+    cloudFile: await readSource("Telegram/SourceFiles/data/data_cloud_file.cpp"),
   };
 }
 
@@ -114,6 +132,15 @@ describe("Desktop direct-download patch e2e", () => {
     expect(helper).toContain('constexpr char kReactionPrefix[] = "bridge-reaction-resource:";');
     expect(helper).toContain("fileReference.startsWith(kStickerPrefix)");
     expect(helper).toContain("fileReference.startsWith(kReactionPrefix)");
+  });
+
+  it("rejects oversized filename-less cloud files before FileLoader asserts", async () => {
+    const { cloudFile } = await patchedFixture();
+    expect(cloudFile).toContain("file.byteSize > Storage::kMaxFileInMemory");
+    expect(cloudFile).toContain("file.flags |= CloudFile::Flag::Failed;");
+    expect(cloudFile).toContain("onstack(false);");
+    expect(cloudFile.indexOf("file.byteSize > Storage::kMaxFileInMemory"))
+      .toBeLessThan(cloudFile.indexOf("file.loader = CreateFileLoader();"));
   });
 
   it("exposes transport state, coalesces URL resolution, and cancels the shared HTTP transfer", async () => {

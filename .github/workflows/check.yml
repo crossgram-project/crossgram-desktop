@@ -112,6 +112,7 @@ jobs:
           repository: ${{ matrix.build.repository }}
           ref: ${{ steps.release.outputs.tag }}
           fetch-depth: 1
+          submodules: recursive
           path: source
 
       - name: Check out 64Gram CMake helpers

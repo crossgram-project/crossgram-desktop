@@ -343,4 +343,31 @@ void DownloadMtprotoTask::fallbackDirectRequests(const QString &reason) {
       "if (requestId < 0)",
     );
   });
+
+  await context.edit(`${sourceRoot}/data/data_cloud_file.cpp`, (file) => {
+    file.replace(
+      `\t} else if ((file.flags & CloudFile::Flag::Failed)
+\t\t|| !file.location.valid()
+\t\t|| (finalCheck && !finalCheck())) {
+\t\treturn;
+\t}
+\tfile.flags &= ~CloudFile::Flag::Cancelled;`,
+      `\t} else if ((file.flags & CloudFile::Flag::Failed)
+\t\t|| !file.location.valid()
+\t\t|| (finalCheck && !finalCheck())) {
+\t\treturn;
+\t} else if (file.byteSize > Storage::kMaxFileInMemory) {
+\t\t// CloudFile always downloads without an output filename. FileLoader
+\t\t// requires those downloads to fit its in-memory limit, so reject
+\t\t// oversized synthetic photo sizes instead of tripping its assertion.
+\t\tfile.flags |= CloudFile::Flag::Failed;
+\t\tif (const auto onstack = fail) {
+\t\t\tonstack(false);
+\t\t}
+\t\treturn;
+\t}
+\tfile.flags &= ~CloudFile::Flag::Cancelled;`,
+      "oversized synthetic photo sizes",
+    );
+  });
 }
