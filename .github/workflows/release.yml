@@ -372,7 +372,10 @@ jobs:
           replacement = "https://github.com/desktop-app/rnnoise.git"
           if upstream not in text:
               raise SystemExit("generated Dockerfile does not contain the expected rnnoise source")
-          text = text.replace("COPY --link ", "COPY ")
+          final_stage = text.rfind("\nFROM builder\n")
+          if final_stage < 0:
+              raise SystemExit("generated Dockerfile does not contain the final builder stage")
+          text = text[:final_stage] + text[final_stage:].replace("COPY --link ", "COPY ")
           text = text.replace("-j$(nproc)", "-j2")
           text = text.replace("-j2 install", "-j4 install")
           text = text.replace("cmake --build build", "cmake --build build --parallel 2")

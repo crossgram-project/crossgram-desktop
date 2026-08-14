@@ -80,7 +80,8 @@ describe("targets", () => {
     expect(release).not.toContain('release_tag="crossgram/$TARGET/');
     expect(release).toContain("desktop-app/rnnoise.git");
     expect(release).toContain("generated Dockerfile does not contain the expected rnnoise source");
-    expect(release).toContain('text = text.replace("COPY --link ", "COPY ")');
+    expect(release).toContain('final_stage = text.rfind("\\nFROM builder\\n")');
+    expect(release).toContain('text = text[:final_stage] + text[final_stage:].replace("COPY --link ", "COPY ")');
     expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
     expect(release).toContain('text = text.replace("-j2 install", "-j4 install")');
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 2")');
