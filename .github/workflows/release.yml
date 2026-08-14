@@ -408,13 +408,13 @@ jobs:
               "./b2 release link=static cflags=\"$CFLAGS\" cxxflags=\"$CXXFLAGS\" linkflags=\"$LDFLAGS\" -j4 install\ncd ..",
               "./b2 release link=static cflags=\"$CFLAGS\" cxxflags=\"$CXXFLAGS\" linkflags=\"$LDFLAGS\" -j4 stage\nmkdir -p /usr/src/boost-cache/usr/local/include /usr/src/boost-cache/usr/local/lib\ncp -a boost /usr/src/boost-cache/usr/local/include/\ncp -a stage/lib/. /usr/src/boost-cache/usr/local/lib/\ntar -C /usr/src -czf /usr/src/boost-cache.tar boost-cache\ncd ..",
           )
-          text = text.replace("cmake --build build", "cmake --build build --parallel 2")
+          text = text.replace("cmake --build build", "cmake --build build --parallel 1")
           text = text.replace(
               "./config --openssldir=/etc/ssl no-shared no-tests no-dso\nmake -j2",
               "./config --openssldir=/etc/ssl no-shared no-tests no-dso\nmake -j1",
           )
           text = text.replace(
-              "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 2",
+              "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 1",
               "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 4",
           )
           dockerfile.write_text(text.replace("git clone -b v0.2 --depth=1 " + upstream, "git clone --depth=1 " + replacement))
