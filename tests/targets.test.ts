@@ -82,6 +82,7 @@ describe("targets", () => {
     expect(release).toContain("generated Dockerfile does not contain the expected rnnoise source");
     expect(release).toContain('text = text.replace("COPY --link ", "COPY ")');
     expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
+    expect(release).toContain('text = text.replace("-j2 install", "-j4 install")');
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 2")');
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');

@@ -374,6 +374,7 @@ jobs:
               raise SystemExit("generated Dockerfile does not contain the expected rnnoise source")
           text = text.replace("COPY --link ", "COPY ")
           text = text.replace("-j$(nproc)", "-j2")
+          text = text.replace("-j2 install", "-j4 install")
           text = text.replace("cmake --build build", "cmake --build build --parallel 2")
           text = text.replace(
               "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 2",
