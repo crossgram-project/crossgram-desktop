@@ -398,6 +398,7 @@ jobs:
                   )
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
+          text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
           text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")
           text = text.replace(
               "COPY --link --from=boost /usr/src/boost-cache /\n",

@@ -87,6 +87,7 @@ describe("targets", () => {
     expect(release).toContain("make -j2 DESTDIR=/usr/src/breakpad-cache install");
     expect(release).toContain('f"target=/var/cache/ccache-{stage_name}"');
     expect(release).toContain('stage_text = stage_text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
+    expect(release).toContain('text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
     expect(release).toContain('text = text.replace("<<EOF\\n", "<<EOF\\nexport CCACHE_DISABLE=1\\n")');
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
     expect(release).toContain('if stage_name == "xkbcommon"');
