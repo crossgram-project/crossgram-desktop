@@ -384,7 +384,7 @@ jobs:
           text = text.replace("-j2 install", "-j4 install")
           text = text.replace(
               "./b2 release link=static cflags=\"$CFLAGS\" cxxflags=\"$CXXFLAGS\" linkflags=\"$LDFLAGS\" -j4 install\ncd ..",
-              "./b2 release link=static cflags=\"$CFLAGS\" cxxflags=\"$CXXFLAGS\" linkflags=\"$LDFLAGS\" -j4 install\ntar -C /usr/src -czf /usr/src/boost-cache.tar boost-cache\ncd ..",
+              "./b2 release link=static cflags=\"$CFLAGS\" cxxflags=\"$CXXFLAGS\" linkflags=\"$LDFLAGS\" -j4 stage\nmkdir -p /usr/src/boost-cache/usr/local/include /usr/src/boost-cache/usr/local/lib\ncp -a boost /usr/src/boost-cache/usr/local/include/\ncp -a stage/lib/. /usr/src/boost-cache/usr/local/lib/\ntar -C /usr/src -czf /usr/src/boost-cache.tar boost-cache\ncd ..",
           )
           text = text.replace("cmake --build build", "cmake --build build --parallel 2")
           text = text.replace(
