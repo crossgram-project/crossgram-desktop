@@ -372,18 +372,27 @@ jobs:
           replacement = "https://github.com/desktop-app/rnnoise.git"
           if upstream not in text:
               raise SystemExit("generated Dockerfile does not contain the expected rnnoise source")
-          breakpad_stage = text.find("\nFROM builder AS breakpad\n")
-          if breakpad_stage >= 0:
-              next_stage = text.find("\nFROM ", breakpad_stage + 1)
+          stage_start = 0
+          while True:
+              stage_start = text.find("\nFROM builder AS ", stage_start)
+              if stage_start < 0:
+                  break
+              stage_name_start = stage_start + len("\nFROM builder AS ")
+              stage_name_end = text.find("\n", stage_name_start)
+              stage_name = text[stage_name_start:stage_name_end]
+              next_stage = text.find("\nFROM ", stage_name_end)
               if next_stage < 0:
                   next_stage = len(text)
               text = (
-                  text[:breakpad_stage]
-                  + text[breakpad_stage:next_stage].replace(
-                      "target=/var/cache/ccache", "target=/var/cache/ccache-breakpad", 1
+                  text[:stage_start]
+                  + text[stage_start:next_stage].replace(
+                      "target=/var/cache/ccache",
+                      f"target=/var/cache/ccache-{stage_name}",
+                      1,
                   )
                   + text[next_stage:]
               )
+              stage_start = next_stage
           text = text.replace(
               "COPY --link --from=boost /usr/src/boost-cache /\n",
               "COPY --link --from=boost /usr/src/boost-cache.tar /usr/src/boost-cache.tar\nRUN tar -C / -xzf /usr/src/boost-cache.tar && rm /usr/src/boost-cache.tar\n",
