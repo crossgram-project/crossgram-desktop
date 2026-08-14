@@ -389,6 +389,7 @@ jobs:
                   f"target=/var/cache/ccache-{stage_name}",
                   1,
               )
+              stage_text = stage_text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
               if stage_name == "xkbcommon":
                   stage_text = stage_text.replace(
                       "cmake --build build --parallel 1",
