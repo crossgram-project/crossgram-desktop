@@ -83,6 +83,7 @@ describe("targets", () => {
     expect(release).toContain('text = text.replace("COPY --link ", "COPY ")');
     expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 2")');
+    expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
     expect(check).toContain('Verify 64Gram Windows CBOR symbol isolation');
