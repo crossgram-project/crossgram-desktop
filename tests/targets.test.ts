@@ -85,6 +85,7 @@ describe("targets", () => {
     expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
     expect(release).toContain('text = text.replace("-j2 install", "-j4 install")');
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 2")');
+    expect(release).toContain("./config --openssldir=/etc/ssl no-shared no-tests no-dso\\nmake -j4");
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');

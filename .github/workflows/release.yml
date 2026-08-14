@@ -380,6 +380,10 @@ jobs:
           text = text.replace("-j2 install", "-j4 install")
           text = text.replace("cmake --build build", "cmake --build build --parallel 2")
           text = text.replace(
+              "./config --openssldir=/etc/ssl no-shared no-tests no-dso\nmake -j2",
+              "./config --openssldir=/etc/ssl no-shared no-tests no-dso\nmake -j4",
+          )
+          text = text.replace(
               "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 2",
               "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 4",
           )
