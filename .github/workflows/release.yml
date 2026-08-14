@@ -372,6 +372,7 @@ jobs:
           replacement = "https://github.com/desktop-app/rnnoise.git"
           if upstream not in text:
               raise SystemExit("generated Dockerfile does not contain the expected rnnoise source")
+          text = text.replace("COPY --link ", "COPY ")
           dockerfile.write_text(text.replace("git clone -b v0.2 --depth=1 " + upstream, "git clone --depth=1 " + replacement))
           PY
           docker build -t crossgram-tdesktop-build .
