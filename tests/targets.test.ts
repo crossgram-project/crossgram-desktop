@@ -81,6 +81,8 @@ describe("targets", () => {
     expect(release).toContain("desktop-app/rnnoise.git");
     expect(release).toContain("generated Dockerfile does not contain the expected rnnoise source");
     expect(release).toContain('text = text.replace("COPY --link ", "COPY ")');
+    expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
+    expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 2")');
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
     expect(check).toContain('Verify 64Gram Windows CBOR symbol isolation');
