@@ -393,6 +393,7 @@ jobs:
                   + text[next_stage:]
               )
               stage_start = next_stage
+          text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")
           text = text.replace(
               "COPY --link --from=boost /usr/src/boost-cache /\n",
               "COPY --link --from=boost /usr/src/boost-cache.tar /usr/src/boost-cache.tar\nRUN tar -C / -xzf /usr/src/boost-cache.tar && rm /usr/src/boost-cache.tar\n",
