@@ -84,7 +84,7 @@ describe("targets", () => {
     expect(release).toContain('text = text[:final_stage] + text[final_stage:].replace("COPY --link ", "COPY ")');
     expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
     expect(release).toContain('text = text.replace("-j2 install", "-j4 install")');
-    expect(release).toContain("make -j4 DESTDIR=/usr/src/breakpad-cache install");
+    expect(release).toContain("make -j2 DESTDIR=/usr/src/breakpad-cache install");
     expect(release).toContain('f"target=/var/cache/ccache-{stage_name}"');
     expect(release).toContain('text = text.replace("<<EOF\\n", "<<EOF\\nexport CCACHE_DISABLE=1\\n")');
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
