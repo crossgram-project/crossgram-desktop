@@ -363,6 +363,17 @@ jobs:
           poetry install
           generated="$(DEBUG= LTO= poetry run gen_dockerfile)"
           printf '%s\n' "$generated" > Dockerfile
+          python3 - <<'PY'
+          from pathlib import Path
+
+          dockerfile = Path("Dockerfile")
+          text = dockerfile.read_text()
+          upstream = "https://github.com/xiph/rnnoise.git"
+          replacement = "https://github.com/desktop-app/rnnoise.git"
+          if upstream not in text:
+              raise SystemExit("generated Dockerfile does not contain the expected rnnoise source")
+          dockerfile.write_text(text.replace("git clone -b v0.2 --depth=1 " + upstream, "git clone --depth=1 " + replacement))
+          PY
           docker build -t crossgram-tdesktop-build .
           sudo apt-get update
           sudo apt-get install -y xvfb

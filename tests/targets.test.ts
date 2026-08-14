@@ -78,6 +78,8 @@ describe("targets", () => {
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
     expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");
     expect(release).not.toContain('release_tag="crossgram/$TARGET/');
+    expect(release).toContain("desktop-app/rnnoise.git");
+    expect(release).toContain("generated Dockerfile does not contain the expected rnnoise source");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
     expect(check).toContain('Verify 64Gram Windows CBOR symbol isolation');
