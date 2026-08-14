@@ -84,6 +84,7 @@ describe("targets", () => {
     expect(release).toContain('text = text[:final_stage] + text[final_stage:].replace("COPY --link ", "COPY ")');
     expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
     expect(release).toContain('text = text.replace("-j2 install", "-j4 install")');
+    expect(release).toContain("make -j4 DESTDIR=/usr/src/breakpad-cache install");
     expect(release).toContain("-j4 stage");
     expect(release).toContain("cp -a boost /usr/src/boost-cache/usr/local/include/");
     expect(release).toContain("tar -C /usr/src -czf /usr/src/boost-cache.tar boost-cache");
