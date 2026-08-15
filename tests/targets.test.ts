@@ -117,8 +117,8 @@ describe("targets", () => {
     expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm no-engine no-legacy no-deprecated",');
     expect(release).toContain('export CFLAGS=\\"${CFLAGS//-O3/-O1}\\"');
     expect(release).toContain('export CXXFLAGS=\\"${CXXFLAGS//-O3/-O1}\\"');
-    expect(release).toContain("export CC=/usr/bin/gcc");
-    expect(release).toContain("export CXX=/usr/bin/g++");
+    expect(release).toContain("export CC=/usr/bin/clang");
+    expect(release).toContain("export CXX=/usr/bin/clang++");
     expect(release).toContain('stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)');
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');
