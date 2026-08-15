@@ -114,7 +114,7 @@ describe("targets", () => {
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 1")');
     expect(release).toContain('if stage_name == "openssl"');
     expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso",');
-    expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm no-engine",');
+    expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm no-engine no-legacy no-deprecated",');
     expect(release).toContain("export CC=/usr/bin/gcc");
     expect(release).toContain("export CXX=/usr/bin/g++");
     expect(release).toContain('stage_text = stage_text.replace("make -j$(nproc)", "make -j1", 1)');

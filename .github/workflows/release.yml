@@ -418,7 +418,7 @@ jobs:
               if stage_name == "openssl":
                   stage_text = stage_text.replace(
                       "./config --openssldir=/etc/ssl no-shared no-tests no-dso",
-                      "./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm no-engine",
+                      "./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm no-engine no-legacy no-deprecated",
                       1,
                   )
                   stage_text = stage_text.replace("cd openssl\n", "cd openssl\nexport CC=/usr/bin/gcc\nexport CXX=/usr/bin/g++\nexport CFLAGS=\"${CFLAGS//-fhardened/}\"\nexport CFLAGS=\"${CFLAGS//-Wno-hardened/}\"\nexport CXXFLAGS=\"${CXXFLAGS//-fhardened/}\"\nexport CXXFLAGS=\"${CXXFLAGS//-Wno-hardened/}\"\n", 1)
