@@ -115,7 +115,7 @@ describe("targets", () => {
     expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm",');
     expect(release).toContain("export CC=clang");
     expect(release).toContain("export CXX=clang++");
-    expect(release).toContain('stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)');
+    expect(release).toContain('stage_text = stage_text.replace("make -j$(nproc)", "make -j1", 1)');
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
