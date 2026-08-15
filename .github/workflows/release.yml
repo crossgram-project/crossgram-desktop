@@ -412,7 +412,7 @@ jobs:
           text = text.replace("-j2 install", "-j4 install")
           text = text.replace(
               "CFLAGS=\"$CFLAGS -fno-lto\" CXXFLAGS=\"$CXXFLAGS -fno-lto\" ./configure\nmake -j2",
-              "CFLAGS=\"$CFLAGS -fno-lto\" CXXFLAGS=\"$CXXFLAGS -fno-lto\" ./configure\nfind . -name Makefile -type f -exec sed -i -e '/dump_syms_mac/d' -e 's#src/tools/mac/dump_syms/dump_syms_tool.cc##g' -e 's#/dump_syms_tool.cc##g' {} +\nmake -j2",
+              "sed -i '289,292d;731,765d' Makefile.am\nautoreconf -fi\nCFLAGS=\"$CFLAGS -fno-lto\" CXXFLAGS=\"$CXXFLAGS -fno-lto\" ./configure\nmake -j2",
           )
           text = text.replace("make DESTDIR=/usr/src/breakpad-cache install", "make -j2 DESTDIR=/usr/src/breakpad-cache install")
           text = text.replace(
