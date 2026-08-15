@@ -88,6 +88,8 @@ describe("targets", () => {
     expect(release).toContain("sed -i '8220,8525d;5271,5277d;2726,2763d;1402,1432d;335d;238d' Makefile.in");
     expect(release).toContain('f"target=/var/cache/ccache-{stage_name}"');
     expect(release).toContain('stage_text = stage_text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
+    expect(release).toContain("gperf flex bison clang-tools-extra");
+    expect(release).toContain("gperf flex bison clang clang-tools-extra");
     expect(release).toContain('text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
     expect(release).toContain('text = text.replace("<<EOF\\n", "<<EOF\\nexport CCACHE_DISABLE=1\\n")');
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
