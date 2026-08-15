@@ -113,13 +113,10 @@ describe("targets", () => {
     expect(release).toContain("COPY --link --from=boost /usr/src/boost-cache.tar /usr/src/boost-cache.tar");
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 1")');
     expect(release).toContain('if stage_name == "openssl"');
-    expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso",');
-    expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm no-engine no-legacy no-deprecated",');
-    expect(release).toContain('export CFLAGS=\\"${CFLAGS//-O3/-O1}\\"');
-    expect(release).toContain('export CXXFLAGS=\\"${CXXFLAGS//-O3/-O1}\\"');
-    expect(release).toContain("export CC=/usr/bin/clang");
-    expect(release).toContain("export CXX=/usr/bin/clang++");
-    expect(release).toContain('stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)');
+    expect(release).toContain("openssl-devel");
+    expect(release).toContain("mkdir -p /usr/src/openssl-cache/usr/local/include /usr/src/openssl-cache/usr/local/lib64");
+    expect(release).toContain("cp -a /usr/lib64/libssl.a /usr/lib64/libcrypto.a");
+    expect(release).toContain("git clone -b openssl-3.2.1");
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
