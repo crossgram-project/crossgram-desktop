@@ -110,6 +110,7 @@ describe("targets", () => {
     expect(release).toContain('if stage_name == "openssl"');
     expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso",');
     expect(release).toContain('"./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm",');
+    expect(release).toContain('stage_text = stage_text.replace("cd openssl\\n", "cd openssl\\nexport CC=clang\\nexport CXX=clang++\\n", 1)');
     expect(release).toContain('stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)');
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');
