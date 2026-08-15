@@ -105,7 +105,7 @@ describe("targets", () => {
     expect(release).toContain("$CXXFLAGS -O0");
     expect(release).toContain("-j4 stage");
     expect(release).toContain("cp -a boost /usr/src/boost-cache/usr/local/include/");
-    expect(release).toContain("tar -C /usr/src -czf /usr/src/boost-cache.tar boost-cache");
+    expect(release).toContain("tar -C /usr/src/boost-cache -czf /usr/src/boost-cache.tar usr");
     expect(release).toContain('"COPY --link --from=boost /usr/src/boost-cache /\\n",');
     expect(release).toContain("COPY --link --from=boost /usr/src/boost-cache.tar /usr/src/boost-cache.tar");
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 1")');
