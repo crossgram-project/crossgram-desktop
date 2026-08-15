@@ -418,7 +418,7 @@ jobs:
                   stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
-          text = text.replace("gperf flex bison clang-tools-extra \", "gperf flex bison clang clang-tools-extra \", 1)
+          text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra", 1)
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
           text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")
           text = text.replace(
