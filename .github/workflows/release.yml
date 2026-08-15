@@ -396,6 +396,12 @@ jobs:
                       "cmake --build build --parallel 4",
                       1,
                   )
+              if stage_name == "xkbcommon":
+                  stage_text = stage_text.replace(
+                      "<<EOF\n",
+                      "<<EOF\nexport CFLAGS=\"$CFLAGS -O0\"\nexport CXXFLAGS=\"$CXXFLAGS -O0\"\n",
+                      1,
+                  )
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")

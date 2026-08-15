@@ -93,6 +93,10 @@ describe("targets", () => {
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
     expect(release).toContain('if stage_name in {"xkbcommon", "protobuf"}');
     expect(release).toContain('"cmake --build build --parallel 4"');
+    expect(release).toContain("export CFLAGS=");
+    expect(release).toContain("$CFLAGS -O0");
+    expect(release).toContain("export CXXFLAGS=");
+    expect(release).toContain("$CXXFLAGS -O0");
     expect(release).toContain("-j4 stage");
     expect(release).toContain("cp -a boost /usr/src/boost-cache/usr/local/include/");
     expect(release).toContain("tar -C /usr/src -czf /usr/src/boost-cache.tar boost-cache");
