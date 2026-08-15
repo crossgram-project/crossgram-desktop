@@ -390,7 +390,7 @@ jobs:
                   1,
               )
               stage_text = stage_text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
-              if stage_name == "xkbcommon":
+              if stage_name in {"xkbcommon", "protobuf"}:
                   stage_text = stage_text.replace(
                       "cmake --build build --parallel 1",
                       "cmake --build build --parallel 4",
