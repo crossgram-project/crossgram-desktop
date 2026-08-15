@@ -410,11 +410,11 @@ jobs:
           text = text[:final_stage] + text[final_stage:].replace("COPY --link ", "COPY ")
           text = text.replace("-j$(nproc)", "-j2")
           text = text.replace("-j2 install", "-j4 install")
-          text = text.replace("make DESTDIR=/usr/src/breakpad-cache install", "make -j2 DESTDIR=/usr/src/breakpad-cache install")
           text = text.replace(
-              "make -j2 DESTDIR=/usr/src/breakpad-cache install",
-              "find . -name Makefile -type f -exec sed -i 's#src/tools/mac/dump_syms##g' {} +\nmake -j2 DESTDIR=/usr/src/breakpad-cache install",
+              "CFLAGS=\"$CFLAGS -fno-lto\" CXXFLAGS=\"$CXXFLAGS -fno-lto\" ./configure\nmake -j2",
+              "CFLAGS=\"$CFLAGS -fno-lto\" CXXFLAGS=\"$CXXFLAGS -fno-lto\" ./configure\nfind . -name Makefile -type f -exec sed -i 's#src/tools/mac/dump_syms##g' {} +\nmake -j2",
           )
+          text = text.replace("make DESTDIR=/usr/src/breakpad-cache install", "make -j2 DESTDIR=/usr/src/breakpad-cache install")
           text = text.replace(
               "./b2 release link=static cflags=\"$CFLAGS\" cxxflags=\"$CXXFLAGS\" linkflags=\"$LDFLAGS\" -j4 install\ncd ..",
               "./b2 release link=static cflags=\"$CFLAGS\" cxxflags=\"$CXXFLAGS\" linkflags=\"$LDFLAGS\" -j4 stage\nmkdir -p /usr/src/boost-cache/usr/local/include /usr/src/boost-cache/usr/local/lib\ncp -a boost /usr/src/boost-cache/usr/local/include/\ncp -a stage/lib/. /usr/src/boost-cache/usr/local/lib/\ntar -C /usr/src -czf /usr/src/boost-cache.tar boost-cache\ncd ..",
