@@ -106,7 +106,7 @@ describe("targets", () => {
     expect(release).toContain('"COPY --link --from=boost /usr/src/boost-cache /\\n",');
     expect(release).toContain("COPY --link --from=boost /usr/src/boost-cache.tar /usr/src/boost-cache.tar");
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 1")');
-    expect(release).toContain("./config --openssldir=/etc/ssl no-shared no-tests no-dso\\nmake -j4");
+    expect(release).toContain("./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm\\nmake -j4");
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
