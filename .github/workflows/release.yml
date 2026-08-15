@@ -418,7 +418,7 @@ jobs:
               if stage_name == "openssl":
                   stage_text = stage_text.replace(
                       "git clone -b openssl-3.2.1 --depth=1 https://github.com/openssl/openssl.git\ncd openssl\nsed -i 's/$cmd $cmdflags -c -o/$cmd $cmdflags -g0 -c -o/' Configurations/unix-Makefile.tmpl\n./config --openssldir=/etc/ssl no-shared no-tests no-dso\nmake -j$(nproc)\nmake DESTDIR=/usr/src/openssl-cache install_sw\ncd ..\nrm -rf openssl",
-                      "mkdir -p /usr/src/openssl-cache/usr/local/include /usr/src/openssl-cache/usr/local/lib64\ncp -a /usr/include/openssl /usr/src/openssl-cache/usr/local/include/\ncp -a /usr/lib64/libssl.a /usr/lib64/libcrypto.a /usr/src/openssl-cache/usr/local/lib64/",
+                      "mkdir -p /usr/src/openssl-cache/usr/local/include /usr/src/openssl-cache/usr/local/lib64\ncp -a /usr/include/openssl /usr/src/openssl-cache/usr/local/include/\ncp -a /usr/lib64/libssl.so* /usr/lib64/libcrypto.so* /usr/src/openssl-cache/usr/local/lib64/",
                       1,
                   )
               text = text[:stage_start] + stage_text + text[next_stage:]
