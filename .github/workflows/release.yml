@@ -408,6 +408,13 @@ jobs:
                       "<<EOF\nexport CFLAGS=\"$CFLAGS -O0\"\nexport CXXFLAGS=\"$CXXFLAGS -O0\"\n",
                       1,
                   )
+              if stage_name == "openssl":
+                  stage_text = stage_text.replace(
+                      "./config --openssldir=/etc/ssl no-shared no-tests no-dso",
+                      "./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm",
+                      1,
+                  )
+                  stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
