@@ -421,7 +421,7 @@ jobs:
                       "./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm no-engine no-legacy no-deprecated",
                       1,
                   )
-                  stage_text = stage_text.replace("cd openssl\n", "cd openssl\nexport CC=/usr/bin/gcc\nexport CXX=/usr/bin/g++\nexport CFLAGS=\"${CFLAGS//-fhardened/}\"\nexport CFLAGS=\"${CFLAGS//-Wno-hardened/}\"\nexport CXXFLAGS=\"${CXXFLAGS//-fhardened/}\"\nexport CXXFLAGS=\"${CXXFLAGS//-Wno-hardened/}\"\n", 1)
+                  stage_text = stage_text.replace("cd openssl\n", "cd openssl\nexport CC=/usr/bin/gcc\nexport CXX=/usr/bin/g++\nexport CFLAGS=\"${CFLAGS//-fhardened/}\"\nexport CFLAGS=\"${CFLAGS//-Wno-hardened/}\"\nexport CXXFLAGS=\"${CXXFLAGS//-fhardened/}\"\nexport CXXFLAGS=\"${CXXFLAGS//-Wno-hardened/}\"\nexport CFLAGS=\"${CFLAGS//-O3/-O1}\"\nexport CXXFLAGS=\"${CXXFLAGS//-O3/-O1}\"\n", 1)
                   stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
