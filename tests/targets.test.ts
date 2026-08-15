@@ -85,6 +85,7 @@ describe("targets", () => {
     expect(release).toContain('text = text.replace("-j$(nproc)", "-j2")');
     expect(release).toContain('text = text.replace("-j2 install", "-j4 install")');
     expect(release).toContain("make -j2 DESTDIR=/usr/src/breakpad-cache install");
+    expect(release).toContain("s#src/tools/mac/dump_syms##g");
     expect(release).toContain('f"target=/var/cache/ccache-{stage_name}"');
     expect(release).toContain('stage_text = stage_text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
     expect(release).toContain('text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
