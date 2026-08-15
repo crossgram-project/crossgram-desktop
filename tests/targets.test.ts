@@ -93,7 +93,7 @@ describe("targets", () => {
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
     expect(release).toContain('if stage_name in {"xkbcommon", "protobuf"}');
     expect(release).toContain('"cmake --build build --parallel 4"');
-    expect(release).toContain('if stage_name in {"xkbcommon", "openssl"}');
+    expect(release).toContain('if stage_name in {"xkbcommon", "openssl", "protobuf"}');
     expect(release).toContain("export CFLAGS=");
     expect(release).toContain("$CFLAGS -O0");
     expect(release).toContain("export CXXFLAGS=");
