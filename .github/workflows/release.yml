@@ -364,6 +364,7 @@ jobs:
           generated="$(DEBUG= LTO= poetry run gen_dockerfile)"
           printf '%s\n' "$generated" > Dockerfile
           python3 - <<'PY'
+          import re
           from pathlib import Path
 
           dockerfile = Path("Dockerfile")
@@ -424,6 +425,19 @@ jobs:
                   stage_text = stage_text.replace("make -j$(nproc)", "make -j1", 1)
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
+          ordered_lines = []
+          previous_stage = "builder"
+          for line in text.splitlines():
+              match = re.match(r"FROM \S+ AS (\S+)$", line)
+              if match and match.group(1) != "builder":
+                  ordered_lines.append(line)
+                  ordered_lines.append(
+                      f"COPY --from={previous_stage} /etc/os-release /tmp/dsh-stage-order"
+                  )
+                  previous_stage = match.group(1)
+              else:
+                  ordered_lines.append(line)
+          text = "\n".join(ordered_lines) + "\n"
           text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra", 1)
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
           text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")

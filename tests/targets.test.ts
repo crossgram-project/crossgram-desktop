@@ -92,6 +92,8 @@ describe("targets", () => {
     expect(release).toContain("gperf flex bison clang clang-tools-extra");
     expect(release).toContain('text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
     expect(release).toContain('text = text.replace("<<EOF\\n", "<<EOF\\nexport CCACHE_DISABLE=1\\n")');
+    expect(release).toContain("import re");
+    expect(release).toContain("dsh-stage-order");
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
     expect(release).toContain('if stage_name == "qt"');
     expect(release).toContain('if stage_name == "xkbcommon"');
