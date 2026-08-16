@@ -449,6 +449,11 @@ jobs:
               "git clone -b xcb-util-image-0.4.1-gitlab --depth=1 https://github.com/gitlab-freedesktop-mirrors/libxcb-image.git\ncd libxcb-image\ngit -c url.\"https://github.com/GlassOnTin/xcb-util-m4.git\".insteadOf=\"https://gitlab.freedesktop.org/xorg/util/xcb-util-m4.git\" submodule update --init --depth=1",
               1,
           )
+          text = text.replace(
+              "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\ncmake -B build .",
+              "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\nsed -i 's/qApp->nativeInterface<QX11Application>()/qApp->nativeInterface<QNativeInterface::QX11Application>()/' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\ncmake -B build .",
+              1,
+          )
           text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra openssl-devel libxkbcommon-devel", 1)
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
           text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")
