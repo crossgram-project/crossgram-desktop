@@ -93,7 +93,6 @@ describe("targets", () => {
     expect(release).toContain('text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
     expect(release).toContain('text = text.replace("<<EOF\\n", "<<EOF\\nexport CCACHE_DISABLE=1\\n")');
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
-    expect(release).toContain("dsh-stage-order");
     expect(release).toContain('if stage_name == "qt"');
     expect(release).toContain('if stage_name == "xkbcommon"');
     expect(release).toContain('if stage_name == "protobuf"');
@@ -117,6 +116,8 @@ describe("targets", () => {
     expect(release).toContain("cp -a /usr/lib64/libssl.so* /usr/lib64/libcrypto.so*");
     expect(release).toContain("git clone -b openssl-3.2.1");
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
+    expect(release).toContain("max-parallelism = 2");
+    expect(release).toContain("docker buildx create --name crossgram-buildkit");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
     expect(check).toContain('Verify 64Gram Windows CBOR symbol isolation');

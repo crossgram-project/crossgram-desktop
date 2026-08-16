@@ -423,19 +423,6 @@ jobs:
                   )
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
-          ordered_lines = []
-          previous_stage = "builder"
-          for line in text.splitlines():
-              match = re.match(r"FROM \S+ AS (\S+)$", line)
-              if match and match.group(1) != "builder":
-                  ordered_lines.append(line)
-                  ordered_lines.append(
-                      f"COPY --from={previous_stage} /etc/os-release /tmp/dsh-stage-order"
-                  )
-                  previous_stage = match.group(1)
-              else:
-                  ordered_lines.append(line)
-          text = "\n".join(ordered_lines) + "\n"
           text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra openssl-devel", 1)
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
           text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")
@@ -470,7 +457,12 @@ jobs:
           )
           dockerfile.write_text(text.replace("git clone -b v0.2 --depth=1 " + upstream, "git clone --depth=1 " + replacement))
           PY
-          docker build -t crossgram-tdesktop-build .
+          cat > "$RUNNER_TEMP/buildkitd.toml" <<'EOF'
+          [worker.oci]
+            max-parallelism = 2
+          EOF
+          docker buildx create --name crossgram-buildkit --driver docker-container --buildkitd-config "$RUNNER_TEMP/buildkitd.toml" --use
+          docker buildx build --builder crossgram-buildkit --load -t crossgram-tdesktop-build .
           sudo apt-get update
           sudo apt-get install -y xvfb
 
