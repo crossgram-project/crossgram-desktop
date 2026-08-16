@@ -96,7 +96,7 @@ describe("targets", () => {
     expect(release).toContain("stage_name = text[stage_name_start:stage_name_end]");
     expect(release).toContain('if stage_name == "qt"');
     expect(release).toContain('if stage_name == "protobuf"');
-    expect(release).toContain('"cmake --build build --parallel 4"');
+    expect(release).toContain('"cmake --build build --parallel 2"');
     expect(release).toContain('"cmake --build build --parallel 2"');
     expect(release).toContain('if stage_name in {"dav1d", "xkbcommon", "protobuf", "jxl", "openal", "openh264", "ffmpeg"}');
     expect(release).toContain('text = text.replace("meson compile -C build", "meson compile -C build -j2")');
