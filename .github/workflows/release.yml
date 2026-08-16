@@ -416,14 +416,15 @@ jobs:
                       1,
                   )
               if stage_name == "xkbcommon":
-                  run_marker = "RUN --mount=type=cache,target=/var/cache/ccache-xkbcommon <<EOF\n"
-                  run_start = stage_text.find(run_marker)
-                  run_end = stage_text.find("\nEOF", run_start)
-                  if run_start < 0 or run_end < 0:
+                  run_start = stage_text.find("RUN ")
+                  heredoc_start = stage_text.find("<<EOF\n", run_start)
+                  run_end = stage_text.find("\nEOF", heredoc_start)
+                  if run_start < 0 or heredoc_start < 0 or run_end < 0:
                       raise SystemExit("generated Dockerfile does not contain the xkbcommon build step")
+                  run_prefix = stage_text[run_start:heredoc_start + len("<<EOF\n")]
                   stage_text = (
                       stage_text[:run_start]
-                      + run_marker
+                      + run_prefix
                       + "mkdir -p /usr/src/xkbcommon-cache/usr/local/include/xkbcommon /usr/src/xkbcommon-cache/usr/local/lib64\n"
                       + "cp -a /usr/include/xkbcommon/. /usr/src/xkbcommon-cache/usr/local/include/xkbcommon/\n"
                       + "cp -a /usr/lib64/libxkbcommon.so* /usr/src/xkbcommon-cache/usr/local/lib64/\nEOF"
