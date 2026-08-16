@@ -98,7 +98,7 @@ describe("targets", () => {
     expect(release).toContain('if stage_name == "protobuf"');
     expect(release).toContain('"cmake --build build --parallel 2"');
     expect(release).toContain('"cmake --build build --parallel 2"');
-    expect(release).toContain('if stage_name in {"dav1d", "xkbcommon", "protobuf", "jxl", "openal", "openh264", "ffmpeg"}');
+    expect(release).toContain('if stage_name in {"dav1d", "xkbcommon", "protobuf", "jxl", "openal", "openh264", "ffmpeg", "qt"}');
     expect(release).toContain('text = text.replace("meson compile -C build", "meson compile -C build -j2")');
     expect(release).toContain("export CFLAGS=");
     expect(release).toContain("$CFLAGS -O0");
