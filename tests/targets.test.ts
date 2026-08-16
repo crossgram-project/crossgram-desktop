@@ -116,6 +116,8 @@ describe("targets", () => {
     expect(release).toContain("git clone -b openssl-3.2.1");
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 4");
     expect(release).toContain("max-parallelism = 2");
+    expect(release).toContain("libxkbcommon-devel");
+    expect(release).toContain("/usr/src/xkbcommon-cache");
     expect(release).toContain("docker buildx create --name crossgram-buildkit");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');

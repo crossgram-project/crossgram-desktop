@@ -415,9 +415,15 @@ jobs:
                       "mkdir -p /usr/src/openssl-cache/usr/local/include /usr/src/openssl-cache/usr/local/lib64\ncp -a /usr/include/openssl /usr/src/openssl-cache/usr/local/include/\ncp -a /usr/lib64/libssl.so* /usr/lib64/libcrypto.so* /usr/src/openssl-cache/usr/local/lib64/",
                       1,
                   )
+              if stage_name == "xkbcommon":
+                  stage_text = stage_text.replace(
+                      "git clone -b xkbcommon-1.6.0 --depth=1 https://github.com/xkbcommon/libxkbcommon.git\ncd libxkbcommon\nmeson build \\\n\\t--buildtype=plain \\\n\\t--default-library=static \\\n\\t-Denable-docs=false \\\n\\t-Denable-wayland=false \\\n\\t-Denable-xkbregistry=false \\\n\\t-Dxkb-config-root=/usr/share/X11/xkb \\\n\\t-Dxkb-config-extra-path=/etc/xkb \\\n\\t-Dx-locale-root=/usr/share/X11/locale\nmeson compile -C build\nDESTDIR=/usr/src/xkbcommon-cache meson install -C build\ncd ..\nrm -rf libxkbcommon",
+                      "mkdir -p /usr/src/xkbcommon-cache/usr/local/include/xkbcommon /usr/src/xkbcommon-cache/usr/local/lib64\ncp -a /usr/include/xkbcommon/. /usr/src/xkbcommon-cache/usr/local/include/xkbcommon/\ncp -a /usr/lib64/libxkbcommon.so* /usr/src/xkbcommon-cache/usr/local/lib64/",
+                      1,
+                  )
               text = text[:stage_start] + stage_text + text[next_stage:]
               stage_start = next_stage
-          text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra openssl-devel", 1)
+          text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra openssl-devel libxkbcommon-devel", 1)
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
           text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")
           text = text.replace(
