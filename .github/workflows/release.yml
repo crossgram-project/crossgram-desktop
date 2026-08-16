@@ -462,7 +462,7 @@ jobs:
           )
           text = text.replace(
               "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 1",
-              "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 1",
+              "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 2",
           )
           dockerfile.write_text(text.replace("git clone -b v0.2 --depth=1 " + upstream, "git clone --depth=1 " + replacement))
           PY
