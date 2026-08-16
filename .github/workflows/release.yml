@@ -462,13 +462,13 @@ jobs:
           )
           text = text.replace(
               "cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 1",
-              "export CFLAGS=\"$CFLAGS -O0\" CXXFLAGS=\"$CXXFLAGS -O0\"\ncmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 2",
+              "export CFLAGS=\"$CFLAGS -O0\" CXXFLAGS=\"$CXXFLAGS -O0\"\ncmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\ncmake --build build --parallel 1",
           )
           dockerfile.write_text(text.replace("git clone -b v0.2 --depth=1 " + upstream, "git clone --depth=1 " + replacement))
           PY
           cat > "$RUNNER_TEMP/buildkitd.toml" <<'EOF'
           [worker.oci]
-            max-parallelism = 1
+            max-parallelism = 2
           EOF
           docker buildx create --name crossgram-buildkit --driver docker-container --buildkitd-config "$RUNNER_TEMP/buildkitd.toml" --use
           docker buildx build --builder crossgram-buildkit --load -t crossgram-tdesktop-build .
