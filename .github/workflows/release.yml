@@ -468,7 +468,7 @@ jobs:
           PY
           cat > "$RUNNER_TEMP/buildkitd.toml" <<'EOF'
           [worker.oci]
-            max-parallelism = 2
+            max-parallelism = 1
           EOF
           docker buildx create --name crossgram-buildkit --driver docker-container --buildkitd-config "$RUNNER_TEMP/buildkitd.toml" --use
           docker buildx build --builder crossgram-buildkit --load -t crossgram-tdesktop-build .

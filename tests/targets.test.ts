@@ -118,7 +118,7 @@ describe("targets", () => {
     expect(release).toContain('export CFLAGS=\\\"$CFLAGS -O0\\\" CXXFLAGS=\\\"$CXXFLAGS -O0\\\"');
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON");
     expect(release).toContain('"cmake --build build --parallel 2"');
-    expect(release).toContain("max-parallelism = 2");
+    expect(release).toContain("max-parallelism = 1");
     expect(release).toContain("libxkbcommon-devel");
     expect(release).toContain("/usr/src/xkbcommon-cache");
     expect(release).toContain("docker buildx create --name crossgram-buildkit");
