@@ -403,6 +403,12 @@ jobs:
                       "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\nsed -i 's/qApp->nativeInterface<QX11Application>()/qApp->nativeInterface<QNativeInterface::QX11Application>()/' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\n",
                       1,
                   )
+              if stage_name == "qt":
+                  stage_text = stage_text.replace(
+                      "cmake -B build .",
+                      "sed -i 's/qApp->nativeInterface<QX11Application>()/qApp->nativeInterface<QNativeInterface::QX11Application>()/' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\ncmake -B build .",
+                      1,
+                  )
               if stage_name == "protobuf":
                   stage_text = stage_text.replace(
                       "cmake --build build --parallel 1",
