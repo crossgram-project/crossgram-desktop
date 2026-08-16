@@ -115,7 +115,9 @@ describe("targets", () => {
     expect(release).toContain("mkdir -p /usr/src/openssl-cache/usr/local/include /usr/src/openssl-cache/usr/local/lib64");
     expect(release).toContain("cp -a /usr/lib64/libssl.so* /usr/lib64/libcrypto.so*");
     expect(release).toContain("git clone -b openssl-3.2.1");
-    expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON\\ncmake --build build --parallel 2");
+    expect(release).toContain('export CFLAGS=\\\"$CFLAGS -O0\\\" CXXFLAGS=\\\"$CXXFLAGS -O0\\\"');
+    expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON");
+    expect(release).toContain('"cmake --build build --parallel 2"');
     expect(release).toContain("max-parallelism = 2");
     expect(release).toContain("libxkbcommon-devel");
     expect(release).toContain("/usr/src/xkbcommon-cache");
