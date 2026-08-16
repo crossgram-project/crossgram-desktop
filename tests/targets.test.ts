@@ -119,7 +119,7 @@ describe("targets", () => {
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON");
     expect(release).toContain('"cmake --build build --parallel 1"');
     expect(release).toContain("max-parallelism = 2");
-    expect(release).toContain("util-common-m4.git");
+    expect(release).toContain("freedesktop-unofficial-mirror/xcb__util-common-m4.git");
     expect(release).toContain("submodule update --init --depth=1");
     expect(release).toContain("libxkbcommon-devel");
     expect(release).toContain("/usr/src/xkbcommon-cache");
