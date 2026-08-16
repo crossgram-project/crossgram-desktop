@@ -431,7 +431,7 @@ jobs:
                       + stage_text[run_end + len("\nEOF"):]
                   )
               text = text[:stage_start] + stage_text + text[next_stage:]
-              stage_start = next_stage
+              stage_start = stage_start + len(stage_text)
           text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra openssl-devel libxkbcommon-devel", 1)
           text = text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")
           text = text.replace("<<EOF\n", "<<EOF\nexport CCACHE_DISABLE=1\n")

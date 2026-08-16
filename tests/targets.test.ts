@@ -87,6 +87,7 @@ describe("targets", () => {
     expect(release).toContain("make -j2 DESTDIR=/usr/src/breakpad-cache install");
     expect(release).toContain("sed -i '8220,8525d;5271,5277d;2726,2763d;1402,1432d;335d;238d' Makefile.in");
     expect(release).toContain('f"target=/var/cache/ccache-{stage_name}"');
+    expect(release).toContain("stage_start = stage_start + len(stage_text)");
     expect(release).toContain('stage_text = stage_text.replace("ccache gcc", "gcc").replace("ccache g++", "g++")');
     expect(release).toContain("gperf flex bison clang-tools-extra");
     expect(release).toContain("gperf flex bison clang clang-tools-extra");
