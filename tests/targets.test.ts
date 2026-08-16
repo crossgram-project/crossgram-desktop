@@ -120,6 +120,7 @@ describe("targets", () => {
     expect(release).toContain('"cmake --build build --parallel 1"');
     expect(release).toContain("max-parallelism = 2");
     expect(release).toContain("GlassOnTin/xcb-util-m4.git");
+    expect(release).toContain("QNativeInterface::QX11Application");
     expect(release).toContain("submodule update --init --depth=1");
     expect(release).toContain("libxkbcommon-devel");
     expect(release).toContain("/usr/src/xkbcommon-cache");
