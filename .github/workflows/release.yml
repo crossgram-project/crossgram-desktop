@@ -403,7 +403,7 @@ jobs:
                       "cmake --build build --parallel 2",
                       1,
                   )
-              if stage_name in {"dav1d", "xkbcommon", "protobuf", "jxl", "openal", "openh264"}:
+              if stage_name in {"dav1d", "xkbcommon", "protobuf", "jxl", "openal", "openh264", "ffmpeg"}:
                   stage_text = stage_text.replace(
                       "<<EOF\n",
                       "<<EOF\nexport CFLAGS=\"$CFLAGS -O0\"\nexport CXXFLAGS=\"$CXXFLAGS -O0\"\n",
