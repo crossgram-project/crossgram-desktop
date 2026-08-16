@@ -434,7 +434,7 @@ jobs:
               stage_start = stage_start + len(stage_text)
           text = text.replace(
               "git clone -b xcb-util-image-0.4.1-gitlab --depth=1 --recursive --shallow-submodules \\\n\thttps://github.com/gitlab-freedesktop-mirrors/libxcb-image.git\ncd libxcb-image",
-              "git clone -b xcb-util-image-0.4.1-gitlab --depth=1 https://github.com/gitlab-freedesktop-mirrors/libxcb-image.git\ncd libxcb-image\ngit -c url.\"https://github.com/freedesktop-unofficial-mirror/xcb__util-common-m4.git\".insteadOf=\"https://gitlab.freedesktop.org/xorg/util/xcb-util-m4.git\" submodule update --init --depth=1",
+              "git clone -b xcb-util-image-0.4.1-gitlab --depth=1 https://github.com/gitlab-freedesktop-mirrors/libxcb-image.git\ncd libxcb-image\ngit -c url.\"https://github.com/GlassOnTin/xcb-util-m4.git\".insteadOf=\"https://gitlab.freedesktop.org/xorg/util/xcb-util-m4.git\" submodule update --init --depth=1",
               1,
           )
           text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra openssl-devel libxkbcommon-devel", 1)
