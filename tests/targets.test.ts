@@ -116,9 +116,11 @@ describe("targets", () => {
     expect(release).toContain('text = text.replace("cmake --build build", "cmake --build build --parallel 1")');
     expect(release).toContain('if stage_name == "openssl"');
     expect(release).toContain("openssl-devel");
-    expect(release).toContain("mkdir -p /usr/src/openssl-cache/usr/local/include /usr/src/openssl-cache/usr/local/lib64");
-    expect(release).toContain("cp -a /usr/lib64/libssl.so* /usr/lib64/libcrypto.so*");
-    expect(release).toContain("git clone -b openssl-3.2.1");
+    expect(release).toContain("export CC=/usr/bin/clang");
+    expect(release).toContain('${CFLAGS//-flto=auto/}');
+    expect(release).toContain("no-shared no-tests no-dso no-asm");
+    expect(release).not.toContain("cp -a /usr/lib64/libssl.so*");
+    expect(release).toContain("unexpectedly depends on shared OpenSSL libraries");
     expect(release).toContain('export CFLAGS=\\\"$CFLAGS -O0\\\" CXXFLAGS=\\\"$CXXFLAGS -O0\\\"');
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON");
     expect(release).toContain('"cmake --build build --parallel 1"');

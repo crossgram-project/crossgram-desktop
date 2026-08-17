@@ -414,10 +414,16 @@ jobs:
                   )
               if stage_name == "openssl":
                   stage_text = stage_text.replace(
-                      "git clone -b openssl-3.2.1 --depth=1 https://github.com/openssl/openssl.git\ncd openssl\nsed -i 's/$cmd $cmdflags -c -o/$cmd $cmdflags -g0 -c -o/' Configurations/unix-Makefile.tmpl\n./config --openssldir=/etc/ssl no-shared no-tests no-dso\nmake -j$(nproc)\nmake DESTDIR=/usr/src/openssl-cache install_sw\ncd ..\nrm -rf openssl",
-                      "mkdir -p /usr/src/openssl-cache/usr/local/include /usr/src/openssl-cache/usr/local/lib64\ncp -a /usr/include/openssl /usr/src/openssl-cache/usr/local/include/\ncp -a /usr/lib64/libssl.so* /usr/lib64/libcrypto.so* /usr/src/openssl-cache/usr/local/lib64/",
+                      "./config --openssldir=/etc/ssl no-shared no-tests no-dso",
+                      "./config --openssldir=/etc/ssl no-shared no-tests no-dso no-asm",
                       1,
                   )
+                  stage_text = stage_text.replace(
+                      "cd openssl\n",
+                      "cd openssl\nexport CC=/usr/bin/clang\nexport CXX=/usr/bin/clang++\nexport CFLAGS=\"${CFLAGS//-fhardened/}\"\nexport CFLAGS=\"${CFLAGS//-Wno-hardened/}\"\nexport CFLAGS=\"${CFLAGS//-flto=auto/}\"\nexport CFLAGS=\"${CFLAGS//-ffat-lto-objects/}\"\nexport CFLAGS=\"${CFLAGS//-O3/-O1}\"\nexport CXXFLAGS=\"$CFLAGS\"\n",
+                      1,
+                  )
+                  stage_text = stage_text.replace("make -j$(nproc)", "make -j4", 1)
               if stage_name == "xkbcommon":
                   run_start = stage_text.find("RUN ")
                   heredoc_start = stage_text.find("<<EOF\n", run_start)
@@ -520,6 +526,10 @@ jobs:
 
             binary="$source/out/Release/$product"
             test -x "$binary"
+            if readelf --dynamic "$binary" | grep -Eq 'Shared library: \[lib(ssl|crypto)\.so'; then
+              echo "$binary unexpectedly depends on shared OpenSSL libraries" >&2
+              exit 1
+            fi
             workdir="$(mktemp -d)"
             set +e
             timeout 20s xvfb-run -a "$binary" -quit -noupdate -workdir "$workdir"
