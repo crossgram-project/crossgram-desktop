@@ -42,28 +42,29 @@ concurrency:
 
 jobs:
   build:
-    name: ${{ matrix.build.target }} / ${{ matrix.platform }}
+    name: ${{ matrix.build.target }} / ${{ matrix.batch.name }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         platform: ${{ fromJSON(inputs.platforms == 'windows-linux' && '["windows","linux"]' || inputs.platforms == 'windows' && '["windows"]' || inputs.platforms == 'linux' && '["linux"]' || inputs.platforms == 'macos' && '["macos"]' || '["windows","linux","macos"]') }}
+        batch:
+          - name: primary
+            brands: '["cross","qq","wechat"]'
+          - name: secondary
+            brands: '["wecom","dingtalk","discord"]'
         build:
           - target: tdesktop
             repository: telegramdesktop/tdesktop
-            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
           - target: tdesktop-x64
             repository: TDesktop-x64/tdesktop
-            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
           - target: ayugram
             repository: AyuGram/AyuGramDesktop
-            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
           - target: materialgram
             repository: kukuruzka165/materialgram
-            brands: '["cross","qq","wechat","wecom","dingtalk","discord"]'
             vsversion: "18.0"
     steps:
       - name: Check out patcher
@@ -89,7 +90,7 @@ jobs:
         env:
           TARGET_FILTER: ${{ inputs.target }}
           MATRIX_TARGET: ${{ matrix.build.target }}
-          AVAILABLE_BRANDS: ${{ matrix.build.brands }}
+          AVAILABLE_BRANDS: ${{ matrix.batch.brands }}
           BRAND_FILTER: ${{ inputs.brands }}
         run: |
           if [ -n "$TARGET_FILTER" ] && [ "$TARGET_FILTER" != all ] && [ "$TARGET_FILTER" != "$MATRIX_TARGET" ]; then
@@ -156,6 +157,7 @@ jobs:
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
+          BRAND_BATCH: ${{ matrix.batch.name }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -302,7 +304,7 @@ jobs:
             repository = $env:UPSTREAM_REPOSITORY
             tag = $env:UPSTREAM_TAG
           } | ConvertTo-Json -Compress
-          $metadataFile = "artifacts/crossgram-$env:CROSSGRAM_TARGET-windows-$env:VERSION.upstream.json"
+          $metadataFile = "artifacts/crossgram-$env:CROSSGRAM_TARGET-$env:BRAND_BATCH-windows-$env:VERSION.upstream.json"
           [IO.File]::WriteAllText($metadataFile, "$releaseMetadata`n", [Text.UTF8Encoding]::new($false))
 
       - name: Build, smoke test, and package Linux brands
@@ -313,6 +315,7 @@ jobs:
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
+          BRAND_BATCH: ${{ matrix.batch.name }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -397,18 +400,6 @@ jobs:
                       "cmake --build build --parallel 2",
                       1,
                   )
-              if stage_name == "qt":
-                  stage_text = stage_text.replace(
-                      "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\n",
-                      "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\nsed -i 's/qApp->nativeInterface<QX11Application>()/qApp->nativeInterface<QNativeInterface::QX11Application>()/' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\n",
-                      1,
-                  )
-              if stage_name == "qt":
-                  stage_text = stage_text.replace(
-                      "cmake -B build .",
-                      "sed -i 's/qApp->nativeInterface<QX11Application>()/qApp->nativeInterface<QNativeInterface::QX11Application>()/' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\ncmake -B build .",
-                      1,
-                  )
               if stage_name == "protobuf":
                   stage_text = stage_text.replace(
                       "cmake --build build --parallel 1",
@@ -451,7 +442,7 @@ jobs:
           )
           text = text.replace(
               "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\ncmake -B build .",
-              "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\nsed -i 's/qApp->nativeInterface<QX11Application>()/qApp->nativeInterface<QNativeInterface::QX11Application>()/' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\ncmake -B build .",
+              "find $PWD/../patches/qtwayland_$QT -type f -print0 | sort -z | xargs -r0 git -C qtwayland apply\nsed -i '/    using namespace QNativeInterface;/i#if QT_CONFIG(xcb)' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\nsed -i '/    return mXkbState.get();/i#endif' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\ngrep -qx '#if QT_CONFIG(xcb)' qtwayland/src/compositor/compositor_api/qwaylandkeyboard.cpp\ncmake -B build .",
               1,
           )
           text = text.replace("gperf flex bison clang-tools-extra", "gperf flex bison clang clang-tools-extra openssl-devel libxkbcommon-devel", 1)
@@ -569,7 +560,7 @@ jobs:
             --arg repository "$UPSTREAM_REPOSITORY" \
             --arg tag "$UPSTREAM_TAG" \
             '{ target: $target, repository: $repository, tag: $tag }' \
-            > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-linux-$VERSION.upstream.json"
+            > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$BRAND_BATCH-linux-$VERSION.upstream.json"
 
       - name: Build, smoke test, and package macOS brands
         if: runner.os == 'macOS' && steps.plan.outputs.needed == 'true'
@@ -579,6 +570,7 @@ jobs:
           VERSION: ${{ steps.release.outputs.safe }}
           UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
+          BRAND_BATCH: ${{ matrix.batch.name }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -621,11 +613,10 @@ jobs:
           first_metadata="$(metadata_for "${brands[0]}")"
           apply_brand "${brands[0]}" false
           brew install automake libtool meson nasm ninja pkg-config
-          build_parallel=()
+          export CMAKE_BUILD_PARALLEL_LEVEL=3 MAKEFLAGS=-j3
+          build_parallel=(--parallel 3)
           if [ "$TARGET" = materialgram ] && [ "$(uname -m)" = arm64 ]; then
             sudo softwareupdate --install-rosetta --agree-to-license
-            export CMAKE_BUILD_PARALLEL_LEVEL=3 MAKEFLAGS=-j3
-            build_parallel=(--parallel 3)
             selected_xcode="$(cd "$(xcode-select -p)/../.." && pwd -P)"
             for xcode in /Applications/Xcode*.app; do
               [ -d "$xcode" ] || continue
@@ -739,13 +730,13 @@ jobs:
             --arg repository "$UPSTREAM_REPOSITORY" \
             --arg tag "$UPSTREAM_TAG" \
             '{ target: $target, repository: $repository, tag: $tag }' \
-            > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-macos-$VERSION.upstream.json"
+            > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$BRAND_BATCH-macos-$VERSION.upstream.json"
 
       - name: Upload artifact
         if: always() && steps.plan.outputs.needed == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: crossgram-${{ matrix.build.target }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
+          name: crossgram-${{ matrix.build.target }}-${{ matrix.batch.name }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
           path: artifacts/crossgram-*
           if-no-files-found: warn
           retention-days: 14
@@ -775,8 +766,8 @@ jobs:
           fi
           mapfile -t metadata < <(find artifacts -maxdepth 1 -type f -name '*.upstream.json' -print | sort)
           if [ "${#metadata[@]}" -eq 0 ]; then
-            echo "No release metadata was downloaded." >&2
-            exit 1
+            echo "No release metadata was downloaded; skipping release."
+            exit 0
           fi
           if jq -s -e 'group_by(.target) | any(.[]; (map(.tag) | unique | length) != 1 or (map(.repository) | unique | length) != 1)' "${metadata[@]}" >/dev/null; then
             echo "Conflicting upstream metadata for the same target." >&2

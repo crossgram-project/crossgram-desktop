@@ -65,15 +65,19 @@ describe("targets", () => {
     ).toEqual(expected);
 
     const releaseTargets = [...release.matchAll(
-      /^\s+- target: (\S+)\r?\n\s+repository: \S+\r?\n\s+brands: '(\[[^']+\])'$/gm,
+      /^\s+- target: (\S+)\r?\n\s+repository: \S+$/gm,
+    )].map((match) => match[1]);
+    expect(releaseTargets).toEqual(targets.map(({ id }) => id));
+    const brandBatches = [...release.matchAll(
+      /^\s+- name: (primary|secondary)\r?\n\s+brands: '(\[[^']+\])'$/gm,
     )].map((match) => ({
-      target: match[1],
+      name: match[1],
       brands: JSON.parse(match[2] ?? "[]") as string[],
     }));
-    expect(releaseTargets).toEqual(targets.map(({ id }) => ({
-      target: id,
-      brands: ["cross", "qq", "wechat", "wecom", "dingtalk", "discord"],
-    })));
+    expect(brandBatches).toEqual([
+      { name: "primary", brands: ["cross", "qq", "wechat"] },
+      { name: "secondary", brands: ["wecom", "dingtalk", "discord"] },
+    ]);
     expect(release).toContain("name: Publish one unified release");
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
     expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");
@@ -120,7 +124,7 @@ describe("targets", () => {
     expect(release).toContain('"cmake --build build --parallel 1"');
     expect(release).toContain("max-parallelism = 2");
     expect(release).toContain("GlassOnTin/xcb-util-m4.git");
-    expect(release).toContain("QNativeInterface::QX11Application");
+    expect(release).toContain("#if QT_CONFIG(xcb)");
     expect(release).toContain("submodule update --init --depth=1");
     expect(release).toContain("libxkbcommon-devel");
     expect(release).toContain("/usr/src/xkbcommon-cache");
@@ -139,12 +143,12 @@ describe("targets", () => {
     expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
     expect(release).toContain("matrix.platform == 'windows' && 'windows-latest'");
     expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(4);
-    expect(release).toContain("matrix.build.target }} / ${{ matrix.platform");
-    expect(release).toContain("crossgram-${{ matrix.build.target }}--${{ matrix.platform");
+    expect(release).toContain("matrix.build.target }} / ${{ matrix.batch.name }} / ${{ matrix.platform");
+    expect(release).toContain("crossgram-${{ matrix.build.target }}-${{ matrix.batch.name }}--${{ matrix.platform");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
-    expect(release).toContain("AVAILABLE_BRANDS: ${{ matrix.build.brands }}");
+    expect(release).toContain("AVAILABLE_BRANDS: ${{ matrix.batch.brands }}");
     expect(release).not.toContain("${{ matrix.build.brand }}");
     expect(release).toContain("-Wno-error=install-absolute-destination");
     expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");
