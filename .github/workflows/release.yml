@@ -491,8 +491,11 @@ jobs:
           EOF
           docker buildx create --name crossgram-buildkit --driver docker-container --buildkitd-config "$RUNNER_TEMP/buildkitd.toml" --use
           docker buildx build --builder crossgram-buildkit --load -t crossgram-tdesktop-build .
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+          # xvfb is part of the GitHub-hosted Ubuntu image. Avoid an apt update
+          # here: a stalled mirror would otherwise consume the remaining
+          # six-hour job budget after the dependency image has finished.
+          command -v xvfb-run >/dev/null
+          command -v Xvfb >/dev/null
 
           effective_id="$(jq -r .apiId <<<"$first_metadata")"
           effective_hash="$(jq -r .apiHash <<<"$first_metadata")"

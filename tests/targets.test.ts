@@ -131,6 +131,10 @@ describe("targets", () => {
     expect(release).toContain("libxkbcommon-devel");
     expect(release).toContain("/usr/src/xkbcommon-cache");
     expect(release).toContain("docker buildx create --name crossgram-buildkit");
+    expect(release).toContain("command -v xvfb-run >/dev/null");
+    expect(release).toContain("command -v Xvfb >/dev/null");
+    expect(release).not.toContain("sudo apt-get update");
+    expect(release).not.toContain("sudo apt-get install -y xvfb");
     expect(check).toContain('--feature e2e');
     expect(check).toContain('Verify opt-in E2E feature');
     expect(check).toContain('Verify 64Gram Windows CBOR symbol isolation');
