@@ -69,15 +69,17 @@ describe("targets", () => {
     )].map((match) => match[1]);
     expect(releaseTargets).toEqual(targets.map(({ id }) => id));
     const brandBatches = [...release.matchAll(
-      /^\s+- name: (primary|secondary)\r?\n\s+brands: '(\[[^']+\])'$/gm,
+      /^\s+- name: (primary|secondary|tertiary)\r?\n\s+brands: '(\[[^']+\])'$/gm,
     )].map((match) => ({
       name: match[1],
       brands: JSON.parse(match[2] ?? "[]") as string[],
     }));
     expect(brandBatches).toEqual([
-      { name: "primary", brands: ["cross", "qq", "wechat"] },
-      { name: "secondary", brands: ["wecom", "dingtalk", "discord"] },
+      { name: "primary", brands: ["cross", "qq"] },
+      { name: "secondary", brands: ["wechat", "wecom"] },
+      { name: "tertiary", brands: ["dingtalk", "discord"] },
     ]);
+    expect(brandBatches.every(({ brands }) => brands.length <= 2)).toBe(true);
     expect(release).toContain("name: Publish one unified release");
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
     expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");

@@ -50,9 +50,11 @@ jobs:
         platform: ${{ fromJSON(inputs.platforms == 'windows-linux' && '["windows","linux"]' || inputs.platforms == 'windows' && '["windows"]' || inputs.platforms == 'linux' && '["linux"]' || inputs.platforms == 'macos' && '["macos"]' || '["windows","linux","macos"]') }}
         batch:
           - name: primary
-            brands: '["cross","qq","wechat"]'
+            brands: '["cross","qq"]'
           - name: secondary
-            brands: '["wecom","dingtalk","discord"]'
+            brands: '["wechat","wecom"]'
+          - name: tertiary
+            brands: '["dingtalk","discord"]'
         build:
           - target: tdesktop
             repository: telegramdesktop/tdesktop
