@@ -131,8 +131,9 @@ describe("targets", () => {
     expect(release).toContain("libxkbcommon-devel");
     expect(release).toContain("/usr/src/xkbcommon-cache");
     expect(release).toContain("docker buildx create --name crossgram-buildkit");
-    expect(release).toContain("command -v xvfb-run >/dev/null");
-    expect(release).toContain("command -v Xvfb >/dev/null");
+    expect(release).toContain('dependency_report="$(ldd "$binary")"');
+    expect(release).toContain("has missing shared runtime dependencies");
+    expect(release).not.toContain("xvfb-run");
     expect(release).not.toContain("sudo apt-get update");
     expect(release).not.toContain("sudo apt-get install -y xvfb");
     expect(check).toContain('--feature e2e');
