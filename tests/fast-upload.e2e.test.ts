@@ -12,7 +12,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function patchedFixture() {
+async function patchedFixture(fixtureOptions: { directMaybeSend?: boolean } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-fast-upload-"));
   roots.push(root);
   const source = path.join(root, "Telegram/SourceFiles");
@@ -37,15 +37,19 @@ private:
 };
 }
 `);
+  const queuedUpload = fixtureOptions.directMaybeSend
+    ? `	_queue.push_back({ itemId, file });
+	maybeSend();`
+    : `	_queue.push_back({ itemId, file });
+	if (!_nextTimer.isActive()) {
+		maybeSend();
+	}`;
   await writeFile(path.join(source, "storage/file_upload.cpp"), `#include "apiwrap.h"
 namespace Storage {
 void Uploader::upload(
 		FullMsgId itemId,
 		const std::shared_ptr<FilePrepareResult> &file) {
-	_queue.push_back({ itemId, file });
-	if (!_nextTimer.isActive()) {
-		maybeSend();
-	}
+${queuedUpload}
 }
 }
 `);
@@ -83,6 +87,13 @@ describe("Desktop hash-first upload patch e2e", () => {
     expect(implementation).toContain("finishFastUpload(itemId, file);");
     expect(implementation.match(/fallbackFastUpload\(itemId, file\);/g)).toHaveLength(3);
     expect(implementation).toContain("enqueueUpload(itemId, file);");
+  });
+
+  it("supports upstreams that call maybeSend directly after queueing", async () => {
+    const { implementation } = await patchedFixture({ directMaybeSend: true });
+    expect(implementation).toContain("tryFastUpload(itemId, file)");
+    expect(implementation).toContain("void Uploader::enqueueUpload(");
+    expect(implementation.match(/_queue\.push_back\(\{ itemId, file \}\);/g)).toHaveLength(2);
   });
 
   it("hashes memory and disk sources in one pass including first-10-MiB MD5", async () => {

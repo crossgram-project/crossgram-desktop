@@ -48,11 +48,14 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
       '\n#include "crossgram/fast_upload.h"',
       '#include "crossgram/fast_upload.h"',
     );
-    file.replace(
-      `	_queue.push_back({ itemId, file });
+    const queuedUploadWithTimer = `	_queue.push_back({ itemId, file });
 	if (!_nextTimer.isActive()) {
 		maybeSend();
-	}`,
+	}`;
+    const queuedUploadDirectly = `	_queue.push_back({ itemId, file });
+	maybeSend();`;
+    file.replace(
+      file.has(queuedUploadWithTimer) ? queuedUploadWithTimer : queuedUploadDirectly,
       `	if (!tryFastUpload(itemId, file)) {
 		enqueueUpload(itemId, file);
 	}`,
