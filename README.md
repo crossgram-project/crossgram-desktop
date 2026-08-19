@@ -9,6 +9,13 @@ one HTTP request per `upload.getFile` part. Any RPC, expiry, or HTTP failure sil
 relay path. The download task exposes `crossgramDownloadTransport()` for
 diagnostics and logs `crossgram_download_transport=<direct|relay>`.
 
+Before uploading a prepared photo or regular document, patched clients hash the
+local bytes once off the UI thread and call `crossgram.prepareMediaUpload` with
+MD5, SHA-1, and the first-10-MiB MD5. A QQ rapid-upload hit skips every
+`upload.saveFilePart` request while preserving Telegram's normal `InputFile`
+send flow. RPC failures and cache misses fall back to the unchanged uploader;
+voice, round-video, and secure uploads are never probed.
+
 When Telegram already has a partial file, the one shared transfer starts with a
 single open-ended `Range: bytes=<first-missing-offset>-` request. Fresh downloads
 use a normal GET; neither path creates one HTTP request per 128 KiB part.
