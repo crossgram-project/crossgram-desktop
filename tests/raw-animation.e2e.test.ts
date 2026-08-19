@@ -169,7 +169,27 @@ bool FFMpegReaderImplementation::renderFrame(
     ),
     writeFile(
       path.join(ffmpeg, "ffmpeg_frame_generator.cpp"),
-      `FrameGenerator::Impl::Impl(const QByteArray &bytes)
+      `#include "ffmpeg/ffmpeg_frame_generator.h"
+
+#include "ffmpeg/ffmpeg_utility.h"
+
+FrameGenerator::Frame FrameGenerator::Impl::renderCurrent(
+\t\tQImage storage,
+\t\tQSize size,
+\t\tQt::AspectRatioMode mode) {
+\tconst auto frame = _current.frame.get();
+\tconst auto srcFormat = (frame->format == AV_PIX_FMT_NONE)
+\t\t? _codec->pix_fmt
+\t\t: frame->format;
+\tconst auto bgra = (srcFormat == AV_PIX_FMT_BGRA);
+\tconst auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);
+\tif (withAlpha) {
+\t\tPremultiplyInplace(storage);
+\t}
+\treturn {};
+}
+
+FrameGenerator::Impl::Impl(const QByteArray &bytes)
 : _bytes(bytes) {
 \t_format = MakeFormatPointer(
 \t\tstatic_cast<void*>(this),
@@ -497,6 +517,26 @@ make -j$NUMBER_OF_PROCESSORS
     expect(cpp).toContain("AV_PIX_FMT_FLAG_ALPHA");
     expect(header).toContain("#include <libavutil/pixdesc.h>");
     expect(cpp.match(/ignore_loop/g)).toHaveLength(1);
+  });
+
+  it("premultiplies every alpha-bearing format in the sticker frame generator", async () => {
+    const root = await fixture();
+    await patch(root);
+    const cpp = await readFile(path.join(
+      root,
+      "Telegram/SourceFiles/ffmpeg/ffmpeg_frame_generator.cpp",
+    ), "utf8");
+
+    expect(cpp).toContain("#include <libavutil/pixdesc.h>");
+    expect(cpp).toContain("av_pix_fmt_desc_get(AVPixelFormat(srcFormat))");
+    expect(cpp).toContain("descriptor->flags & AV_PIX_FMT_FLAG_ALPHA");
+    expect(cpp).toContain("straight-alpha RGB");
+    expect(cpp).not.toContain(
+      "const auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);",
+    );
+    expect(cpp.indexOf("const auto withAlpha = descriptor"))
+      .toBeLessThan(cpp.indexOf("PremultiplyInplace(storage)"));
+    expect(cpp.match(/#include <libavutil\/pixdesc\.h>/g)).toHaveLength(1);
   });
 
   it("does not call avformat_find_stream_info after FFmpeg rejects cached bytes", async () => {

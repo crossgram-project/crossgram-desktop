@@ -37,6 +37,32 @@ function checksum(frame: Buffer): string {
   return createHash("sha256").update(frame).digest("hex");
 }
 
+function pixelFormat(file: string): string {
+  const result = spawnSync("ffprobe", [
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=pix_fmt",
+    "-of", "default=noprint_wrappers=1:nokey=1",
+    path.join(fixtures, file),
+  ], { encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`ffprobe exited with ${result.status}: ${result.stderr}`);
+  }
+  return result.stdout.trim();
+}
+
+function premultiplyRgba(frame: Buffer): Buffer {
+  const result = Buffer.from(frame);
+  for (let index = 0; index < result.length; index += 4) {
+    const alpha = result[index + 3]!;
+    for (let channel = 0; channel < 3; channel++) {
+      result[index + channel] = Math.round((result[index + channel]! * alpha) / 255);
+    }
+  }
+  return result;
+}
+
 describe("Desktop FFmpeg raw animation runtime", () => {
   for (const fixture of [
     { name: "two-frame.gif", label: "GIF", alpha: false },
@@ -55,4 +81,29 @@ describe("Desktop FFmpeg raw animation runtime", () => {
       }
     });
   }
+
+  it("requires premultiplication for RGBA APNG pixels before Qt composition", () => {
+    const fixture = "two-frame-alpha.apng";
+    expect(pixelFormat(fixture)).toBe("rgba");
+
+    const straight = decodedFrames(fixture)[0]!;
+    const hasLeakingStraightPixel = Array.from({ length: straight.length / 4 }, (_, pixel) => {
+      const offset = pixel * 4;
+      const alpha = straight[offset + 3]!;
+      return alpha < 255 && (
+        straight[offset]! > alpha
+        || straight[offset + 1]! > alpha
+        || straight[offset + 2]! > alpha
+      );
+    }).some(Boolean);
+    expect(hasLeakingStraightPixel).toBe(true);
+
+    const premultiplied = premultiplyRgba(straight);
+    for (let offset = 0; offset < premultiplied.length; offset += 4) {
+      const alpha = premultiplied[offset + 3]!;
+      expect(premultiplied[offset]).toBeLessThanOrEqual(alpha);
+      expect(premultiplied[offset + 1]).toBeLessThanOrEqual(alpha);
+      expect(premultiplied[offset + 2]).toBeLessThanOrEqual(alpha);
+    }
+  });
 });

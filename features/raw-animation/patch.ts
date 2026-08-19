@@ -256,6 +256,30 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   });
 
   await context.edit(`${sourceRoot}/ffmpeg/ffmpeg_frame_generator.cpp`, (file) => {
+    file.insertAfter(
+      '#include "ffmpeg/ffmpeg_utility.h"',
+      `
+
+extern "C" {
+#include <libavutil/pixdesc.h>
+} // extern "C"`,
+      "#include <libavutil/pixdesc.h>",
+    );
+
+    file.replace(
+      `\tconst auto bgra = (srcFormat == AV_PIX_FMT_BGRA);
+\tconst auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);`,
+      `\tconst auto bgra = (srcFormat == AV_PIX_FMT_BGRA);
+\t// APNG commonly decodes to RGBA rather than BGRA/YUVA. Frame storage is
+\t// QImage::Format_ARGB32_Premultiplied, so every alpha-bearing FFmpeg
+\t// format must be premultiplied after swscale. Otherwise straight-alpha RGB
+\t// leaks through transparent pixels as colored fringes and rectangles.
+\tconst auto descriptor = av_pix_fmt_desc_get(AVPixelFormat(srcFormat));
+\tconst auto withAlpha = descriptor
+\t\t&& (descriptor->flags & AV_PIX_FMT_FLAG_ALPHA);`,
+      "straight-alpha RGB",
+    );
+
     file.insertBefore(
       `\tauto error = 0;
 \tif ((error = avformat_find_stream_info(_format.get(), nullptr))) {`,
