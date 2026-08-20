@@ -58,16 +58,12 @@ jobs:
         build:
           - target: tdesktop
             repository: telegramdesktop/tdesktop
-            vsversion: "18.0"
           - target: tdesktop-x64
             repository: TDesktop-x64/tdesktop
-            vsversion: "18.0"
           - target: ayugram
             repository: AyuGram/AyuGramDesktop
-            vsversion: "18.0"
           - target: materialgram
             repository: kukuruzka165/materialgram
-            vsversion: "18.0"
     steps:
       - name: Check out patcher
         uses: actions/checkout@v7
@@ -148,7 +144,9 @@ jobs:
           arch: x64
           sdk: 10.0.26100.0
           toolset: "14.44"
-          vsversion: ${{ matrix.build.vsversion }}
+          # Select the Visual Studio installation provided by the runner. A
+          # version range ending at 18.9 excludes the refreshed VS 2026 image,
+          # while the pinned 14.44 toolset still keeps the compiler stable.
 
       - name: Build, smoke test, and package Windows brands
         if: runner.os == 'Windows' && steps.plan.outputs.needed == 'true'

@@ -151,7 +151,9 @@ describe("targets", () => {
     );
     expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
     expect(release).toContain("matrix.platform == 'windows' && 'windows-latest'");
-    expect(release.match(/vsversion: "18\.0"/g)).toHaveLength(4);
+    expect(release).not.toContain("vsversion:");
+    expect(release).toContain("Select the Visual Studio installation provided by the runner");
+    expect(release).toContain('toolset: "14.44"');
     expect(release).toContain("matrix.build.target }} / ${{ matrix.batch.name }} / ${{ matrix.platform");
     expect(release).toContain("crossgram-${{ matrix.build.target }}-${{ matrix.batch.name }}--${{ matrix.platform");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
