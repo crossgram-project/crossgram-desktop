@@ -219,6 +219,19 @@ export async function patchCrossInstanceForward(options: PatchOptions): Promise<
     );
   });
 
+  await context.edit(`${sourceRoot}/data/data_photo_media.cpp`, (file) => {
+    file.insertAfter(
+      '#include "data/data_photo_media.h"',
+      `\n\n${include}`,
+      include,
+    );
+    file.insertBefore(
+      "\tQGuiApplication::clipboard()->setMimeData(mime.release());",
+      "\tCrossgram::DragForward::SanitizeImageMime(mime.get());\n",
+      "Crossgram::DragForward::SanitizeImageMime(mime.get());",
+    );
+  });
+
   await context.edit(`${sourceRoot}/storage/storage_media_prepare.cpp`, (file) => {
     file.replace(
       `if (!data || data->hasFormat(u"application/x-td-forward"_q)) {

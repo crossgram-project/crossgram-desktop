@@ -21,6 +21,7 @@ async function fixture(eol = "\n"): Promise<string> {
     mkdir(path.join(source, "history", "view"), { recursive: true }),
     mkdir(path.join(source, "dialogs"), { recursive: true }),
     mkdir(path.join(source, "core"), { recursive: true }),
+    mkdir(path.join(source, "data"), { recursive: true }),
     mkdir(path.join(source, "storage"), { recursive: true }),
   ]);
   const write = (relative: string, value: string) => writeFile(
@@ -100,6 +101,20 @@ std::shared_ptr<QMimeData> ShareMimeMediaData(const QMimeData *original) {
 	return result;
 }
 `),
+    write("Telegram/SourceFiles/data/data_photo_media.cpp", `#include "data/data_photo_media.h"
+#include <QtGui/QClipboard>
+bool PhotoMedia::setToClipboard() {
+	auto fallback = image(large)->original();
+	auto mime = std::make_unique<QMimeData>();
+	mime->setImageData(std::move(fallback));
+	if (auto bytes = imageBytes(large); !bytes.isEmpty()) {
+		mime->setData(u"image/jpeg"_q, std::move(bytes));
+	}
+	mime->setData(u"application/x-td-use-jpeg"_q, "1");
+	QGuiApplication::clipboard()->setMimeData(mime.release());
+	return true;
+}
+`),
     write("Telegram/SourceFiles/storage/storage_media_prepare.cpp", `MimeDataState ComputeMimeDataState(const QMimeData *data) {
 	if (!data || data->hasFormat(u"application/x-td-forward"_q)) {
 		return MimeDataState::None;
@@ -131,6 +146,7 @@ async function patched(eol = "\n") {
     dialogs: await read("Telegram/SourceFiles/dialogs/dialogs_widget.cpp"),
     main: await read("Telegram/SourceFiles/mainwidget.cpp"),
     mime: await read("Telegram/SourceFiles/core/mime_type.cpp"),
+    photoMedia: await read("Telegram/SourceFiles/data/data_photo_media.cpp"),
     prepare: await read("Telegram/SourceFiles/storage/storage_media_prepare.cpp"),
   };
 }
@@ -146,6 +162,7 @@ describe("Desktop cross-instance media drag patch", () => {
     expect(helper).toContain("i->session == session");
     expect(helper).toContain("QTimer::singleShot(5 * 60 * 1000");
     expect(helper).toContain("AddMultiMediaFiles(data, session, ids);");
+    expect(helper).toContain("SanitizeImageMime(data);");
     expect(header).toContain("std::optional<MessageIdsList> Take(");
     expect(header).toContain("struct FullMsgId;");
     expect(header).not.toContain('"data/data_types.h"');
@@ -196,9 +213,28 @@ describe("Desktop cross-instance media drag patch", () => {
     expect(prepare).toContain("if (!data) {");
   });
 
+  it("removes Telegram's private JPEG override when the payload is not JPEG", async () => {
+    const { helper, header, photoMedia } = await patched();
+    expect(header).toContain("void SanitizeImageMime(QMimeData *data);");
+    expect(helper).toContain("bool IsJpeg(const QByteArray &bytes)");
+    expect(helper).toContain("uchar(bytes[0]) == 0xFF");
+    expect(helper).toContain('data->removeFormat(QStringLiteral("application/x-td-use-jpeg"));');
+    expect(helper).toContain('data->removeFormat(QStringLiteral("image/jpeg"));');
+    expect(photoMedia).toContain('#include "crossgram/drag_forward.h"');
+    expect(photoMedia).toContain("Crossgram::DragForward::SanitizeImageMime(mime.get());");
+    expect(photoMedia.indexOf("SanitizeImageMime(mime.get())"))
+      .toBeLessThan(photoMedia.indexOf("clipboard()->setMimeData"));
+  });
+
   it("preserves CRLF while applying all edits idempotently", async () => {
     const result = await patched("\r\n");
-    for (const source of [result.history, result.list, result.dialogs, result.main]) {
+    for (const source of [
+      result.history,
+      result.list,
+      result.dialogs,
+      result.main,
+      result.photoMedia,
+    ]) {
       expect(source.replaceAll("\r\n", "")).not.toContain("\n");
     }
   });

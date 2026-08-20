@@ -31,4 +31,9 @@ void Set(
 
 void CopyMarker(const QMimeData *source, QMimeData *destination);
 
+// Telegram prefers the private JPEG payload over the standard image data and
+// does not fall back when that payload is empty or contains another format.
+// Keep the optimization only when the advertised bytes really are JPEG.
+void SanitizeImageMime(QMimeData *data);
+
 } // namespace Crossgram::DragForward

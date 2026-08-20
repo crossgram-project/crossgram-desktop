@@ -163,6 +163,14 @@ void ClearStandardMedia(QMimeData *data) {
 	data->removeFormat(QStringLiteral("application/x-td-use-jpeg"));
 }
 
+[[nodiscard]] bool IsJpeg(const QByteArray &bytes) {
+	return bytes.size() >= 4
+		&& uchar(bytes[0]) == 0xFF
+		&& uchar(bytes[1]) == 0xD8
+		&& uchar(bytes[bytes.size() - 2]) == 0xFF
+		&& uchar(bytes[bytes.size() - 1]) == 0xD9;
+}
+
 void AddMultiMediaFiles(
 		QMimeData *data,
 		Data::Session *session,
@@ -237,6 +245,7 @@ void Set(
 		return;
 	}
 	AddMultiMediaFiles(data, session, ids);
+	SanitizeImageMime(data);
 	const auto token = QUuid::createUuid().toByteArray(QUuid::WithoutBraces);
 	Registry().insert(token, Entry{
 		.session = session,
@@ -279,6 +288,17 @@ std::optional<MessageIdsList> Take(
 void CopyMarker(const QMimeData *source, QMimeData *destination) {
 	if (source && destination && source->hasFormat(MimeType())) {
 		destination->setData(MimeType(), source->data(MimeType()));
+	}
+}
+
+void SanitizeImageMime(QMimeData *data) {
+	if (!data || !data->hasFormat(
+			QStringLiteral("application/x-td-use-jpeg"))) {
+		return;
+	}
+	if (!IsJpeg(data->data(QStringLiteral("image/jpeg")))) {
+		data->removeFormat(QStringLiteral("application/x-td-use-jpeg"));
+		data->removeFormat(QStringLiteral("image/jpeg"));
 	}
 }
 
