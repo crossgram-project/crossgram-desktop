@@ -93,14 +93,14 @@ bool Uploader::tryFastUpload(
 	if (!session().data().message(itemId)) return false;
 	crl::async([weak = base::make_weak(this), itemId, file] {
 		const auto hashes = Crossgram::FastUpload::HashPrepared(*file);
-		crl::on_main(weak, [=] {
-			const auto item = session().data().message(itemId);
+		crl::on_main(weak, [weak, itemId, file, hashes] {
+			const auto item = weak->session().data().message(itemId);
 			if (!item) return;
 			if (!hashes) {
-				fallbackFastUpload(itemId, file);
+				weak->fallbackFastUpload(itemId, file);
 				return;
 			}
-			_api->request(MTPcrossgram_PrepareMediaUpload(
+			weak->_api->request(MTPcrossgram_PrepareMediaUpload(
 				item->history()->peer->input(),
 				MTP_long(file->id),
 				MTP_string(file->filename),
@@ -113,14 +113,15 @@ bool Uploader::tryFastUpload(
 				MTP_int(0),
 				MTP_int(0),
 				MTP_double(0)
-			)).done([=](const MTPBool &result) {
+			)).done([weak, itemId, file](const MTPBool &result) {
+				if (!weak) return;
 				if (result.type() == mtpc_boolTrue) {
-					finishFastUpload(itemId, file);
+					weak->finishFastUpload(itemId, file);
 				} else {
-					fallbackFastUpload(itemId, file);
+					weak->fallbackFastUpload(itemId, file);
 				}
-			}).fail([=](const MTP::Error &) {
-				fallbackFastUpload(itemId, file);
+			}).fail([weak, itemId, file](const MTP::Error &) {
+				if (weak) weak->fallbackFastUpload(itemId, file);
 			}).send();
 		});
 	});

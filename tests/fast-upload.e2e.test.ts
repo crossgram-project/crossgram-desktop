@@ -92,9 +92,13 @@ describe("Desktop hash-first upload patch e2e", () => {
     expect(header).toContain("tryFastUpload(FullMsgId itemId");
     expect(implementation).toContain("MTPcrossgram_PrepareMediaUpload(");
     expect(implementation).toContain("crl::async([weak = base::make_weak(this), itemId, file]");
+    expect(implementation).toContain("crl::on_main(weak, [weak, itemId, file, hashes]");
+    expect(implementation).toContain("weak->session().data().message(itemId)");
+    expect(implementation).toContain("weak->_api->request(MTPcrossgram_PrepareMediaUpload(");
+    expect(implementation).toContain("if (!weak) return;");
+    expect(implementation).toContain("weak->finishFastUpload(itemId, file);");
     expect(implementation).toContain("result.type() == mtpc_boolTrue");
-    expect(implementation).toContain("finishFastUpload(itemId, file);");
-    expect(implementation.match(/fallbackFastUpload\(itemId, file\);/g)).toHaveLength(3);
+    expect(implementation.match(/weak->fallbackFastUpload\(itemId, file\);/g)).toHaveLength(3);
     expect(implementation).toContain("enqueueUpload(itemId, file);");
   });
 
