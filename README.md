@@ -8,6 +8,8 @@ The existing part assembler reads from that shared transfer instead of issuing
 one HTTP request per `upload.getFile` part. Any RPC, expiry, or HTTP failure silently falls back to the original `upload.getFile`
 relay path. The download task exposes `crossgramDownloadTransport()` for
 diagnostics and logs `crossgram_download_transport=<direct|relay>`.
+While a document is downloading, its message status row also shows the selected
+transport as a green **直连**, orange **中转**, or gray **连接中** badge.
 
 Before uploading a prepared photo or regular document, patched clients hash the
 local bytes once off the UI thread and call `crossgram.prepareMediaUpload` with

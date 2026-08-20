@@ -74,6 +74,11 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
 	bool _directFinished = false;`,
       "_nextDirectRequestId = -1",
     );
+    file.insertAfter(
+      "	qint64 _directUrlExpiresAt = 0;",
+      "\n	bool _directCandidate = false;",
+      "_directCandidate = false",
+    );
   });
 
   await context.edit(`${sourceRoot}/storage/download_manager_mtproto.cpp`, (file) => {
@@ -94,6 +99,11 @@ export async function patchDirectDownload(options: PatchOptions): Promise<void> 
       `
 
 QString DownloadMtprotoTask::crossgramDownloadTransport() const {
+	if (!_directCandidate) {
+		return QString();
+	} else if (_directResolving) {
+		return u"connecting"_q;
+	}
 	return (!_directDisabled
 		&& !_directUrl.isEmpty()
 		&& _directUrlExpiresAt > QDateTime::currentMSecsSinceEpoch())
@@ -310,9 +320,32 @@ void DownloadMtprotoTask::fallbackDirectRequests(const QString &reason) {
       "QString DownloadMtprotoTask::crossgramDownloadTransport() const",
     );
     file.replace(
+      `QString DownloadMtprotoTask::crossgramDownloadTransport() const {
+	return (!_directDisabled
+		&& !_directUrl.isEmpty()
+		&& _directUrlExpiresAt > QDateTime::currentMSecsSinceEpoch())
+		? u"direct"_q
+		: u"relay"_q;
+}`,
+      `QString DownloadMtprotoTask::crossgramDownloadTransport() const {
+	if (!_directCandidate) {
+		return QString();
+	} else if (_directResolving) {
+		return u"connecting"_q;
+	}
+	return (!_directDisabled
+		&& !_directUrl.isEmpty()
+		&& _directUrlExpiresAt > QDateTime::currentMSecsSinceEpoch())
+		? u"direct"_q
+		: u"relay"_q;
+}`,
+      "if (!_directCandidate)",
+    );
+    file.replace(
       "\t\tconst auto reference = location.fileReference();",
       `		if (Crossgram::DirectDownload::IsCandidate(location.fileReference())
 			&& !_directDisabled) {
+			_directCandidate = true;
 			if (!_directUrl.isEmpty()
 				&& _directUrlExpiresAt > QDateTime::currentMSecsSinceEpoch()) {
 				return sendDirectRequest(requestData);
@@ -325,6 +358,16 @@ void DownloadMtprotoTask::fallbackDirectRequests(const QString &reason) {
 		}
 		const auto reference = location.fileReference();`,
       "return resolveDirectUrl(requestData, location);",
+    );
+    file.replace(
+      `		if (Crossgram::DirectDownload::IsCandidate(location.fileReference())
+			&& !_directDisabled) {
+			if (!_directUrl.isEmpty()`,
+      `		if (Crossgram::DirectDownload::IsCandidate(location.fileReference())
+			&& !_directDisabled) {
+			_directCandidate = true;
+			if (!_directUrl.isEmpty()`,
+      "_directCandidate = true;",
     );
     file.replace(
       `void DownloadMtprotoTask::cancelRequest(mtpRequestId requestId) {
@@ -341,6 +384,113 @@ void DownloadMtprotoTask::fallbackDirectRequests(const QString &reason) {
 		api().request(requestId).cancel();
 	}`,
       "if (requestId < 0)",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/storage/file_download.h`, (file) => {
+    file.insertAfter(
+      `	[[nodiscard]] virtual uint64 objId() const {
+		return 0;
+	}`,
+      `
+	[[nodiscard]] virtual QString crossgramDownloadTransport() const {
+		return QString();
+	}`,
+      "virtual QString crossgramDownloadTransport() const",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/storage/file_download_mtproto.h`, (file) => {
+    file.insertAfter(
+      "	uint64 objId() const override;",
+      "\n	QString crossgramDownloadTransport() const override;",
+      "QString crossgramDownloadTransport() const override;",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/storage/file_download_mtproto.cpp`, (file) => {
+    file.insertAfterFunction(
+      "uint64 mtpFileLoader::objId() const",
+      `
+
+QString mtpFileLoader::crossgramDownloadTransport() const {
+	return DownloadMtprotoTask::crossgramDownloadTransport();
+}`,
+      "QString mtpFileLoader::crossgramDownloadTransport() const",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/data/data_document.h`, (file) => {
+    file.insertAfter(
+      "	[[nodiscard]] QString loadingFilePath() const;",
+      "\n	[[nodiscard]] QString crossgramDownloadTransport() const;",
+      "QString crossgramDownloadTransport() const;",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/data/data_document.cpp`, (file) => {
+    file.insertAfterFunction(
+      "QString DocumentData::loadingFilePath() const",
+      `
+
+QString DocumentData::crossgramDownloadTransport() const {
+	return loading()
+		? _loader->crossgramDownloadTransport()
+		: QString();
+}`,
+      "QString DocumentData::crossgramDownloadTransport() const",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/history/view/media/history_view_document.cpp`, (file) => {
+    file.replace(
+      `	auto statusText = voiceStatusOverride.isEmpty() ? _statusText : voiceStatusOverride;
+	p.setFont(st::normalFont);
+	p.setPen(stm->mediaFg);
+	p.drawTextLeft(nameleft, statustop, width, statusText);
+
+	if (_realParent->isUnreadMedia()) {
+		auto w = st::normalFont->width(statusText);`,
+      `	auto statusText = voiceStatusOverride.isEmpty() ? _statusText : voiceStatusOverride;
+	const auto transport = _data->crossgramDownloadTransport();
+	auto statusleft = nameleft;
+	if (!transport.isEmpty()) {
+		const auto label = (transport == u"direct"_q)
+			? u"直连"_q
+			: (transport == u"relay"_q)
+			? u"中转"_q
+			: u"连接中"_q;
+		const auto background = (transport == u"direct"_q)
+			? QColor(46, 173, 102, 224)
+			: (transport == u"relay"_q)
+			? QColor(224, 138, 36, 224)
+			: QColor(112, 112, 112, 217);
+		const auto badgeSkip = 6;
+		const auto badgeHeight = st::normalFont->height;
+		const auto badgeWidth = st::normalFont->width(label) + 12;
+		const auto badge = style::rtlrect(
+			statusleft,
+			statustop,
+			badgeWidth,
+			badgeHeight,
+			width);
+		p.save();
+		p.setPen(Qt::NoPen);
+		p.setBrush(background);
+		p.drawRoundedRect(badge, badgeHeight / 2., badgeHeight / 2.);
+		p.setFont(st::normalFont);
+		p.setPen(Qt::white);
+		p.drawText(badge, Qt::AlignCenter, label);
+		p.restore();
+		statusleft += badgeWidth + badgeSkip;
+	}
+	p.setFont(st::normalFont);
+	p.setPen(stm->mediaFg);
+	p.drawTextLeft(statusleft, statustop, width, statusText);
+
+	if (_realParent->isUnreadMedia()) {
+		auto w = statusleft - nameleft + st::normalFont->width(statusText);`,
+      "const auto transport = _data->crossgramDownloadTransport();",
     );
   });
 

@@ -19,6 +19,7 @@ async function fixture(): Promise<string> {
   const source = path.join(root, "Telegram", "SourceFiles");
   await Promise.all([
     mkdir(path.join(source, "data"), { recursive: true }),
+    mkdir(path.join(source, "history", "view", "media"), { recursive: true }),
     mkdir(path.join(source, "mtproto", "scheme"), { recursive: true }),
     mkdir(path.join(source, "storage"), { recursive: true }),
   ]);
@@ -39,6 +40,29 @@ private:
 \tmtpRequestId _cdnHashesRequestId = 0;
 };
 `, "utf8");
+  await writeFile(path.join(source, "storage", "file_download.h"), `class FileLoader {
+public:
+	[[nodiscard]] virtual uint64 objId() const {
+		return 0;
+	}
+};
+`, "utf8");
+  await writeFile(path.join(source, "storage", "file_download_mtproto.h"), `class mtpFileLoader final
+	: public FileLoader
+	, private Storage::DownloadMtprotoTask {
+public:
+	Data::FileOrigin fileOrigin() const override;
+	uint64 objId() const override;
+};
+`, "utf8");
+  await writeFile(path.join(source, "storage", "file_download_mtproto.cpp"), `uint64 mtpFileLoader::objId() const {
+	return DownloadMtprotoTask::objectId();
+}
+
+bool mtpFileLoader::readyToRequest() const {
+	return true;
+}
+`, "utf8");
   await writeFile(path.join(source, "storage", "download_manager_mtproto.cpp"), `#include "base/openssl_help.h"
 const DownloadMtprotoTask::Location &DownloadMtprotoTask::location() const {
 \treturn _location;
@@ -54,6 +78,39 @@ void DownloadMtprotoTask::cancelRequest(mtpRequestId requestId) {
 \tapi().request(requestId).cancel();
 }
 `, "utf8");
+  await writeFile(path.join(source, "data", "data_document.h"), `class DocumentData {
+public:
+	[[nodiscard]] bool loading() const;
+	[[nodiscard]] QString loadingFilePath() const;
+};
+`, "utf8");
+  await writeFile(path.join(source, "data", "data_document.cpp"), `QString DocumentData::loadingFilePath() const {
+	return loading() ? _loader->fileName() : QString();
+}
+
+bool DocumentData::displayLoading() const {
+	return true;
+}
+`, "utf8");
+  await writeFile(
+    path.join(source, "history", "view", "media", "history_view_document.cpp"),
+    `void Document::draw(Painter &p, const PaintContext &context) const {
+	auto statuswidth = namewidth;
+	auto statusText = voiceStatusOverride.isEmpty() ? _statusText : voiceStatusOverride;
+	p.setFont(st::normalFont);
+	p.setPen(stm->mediaFg);
+	p.drawTextLeft(nameleft, statustop, width, statusText);
+
+	if (_realParent->isUnreadMedia()) {
+		auto w = st::normalFont->width(statusText);
+		if (w + st::mediaUnreadSkip + st::mediaUnreadSize <= statuswidth) {
+			p.drawEllipse(QRect());
+		}
+	}
+}
+`,
+    "utf8",
+  );
   await writeFile(path.join(source, "data", "data_cloud_file.cpp"), `void LoadCloudFile(
 \tCloudFile &file,
 \tFn<bool()> finalCheck,
@@ -79,6 +136,12 @@ async function patchedFixture(): Promise<{
   implementation: string;
   helper: string;
   cloudFile: string;
+  fileLoader: string;
+  mtprotoLoaderHeader: string;
+  mtprotoLoaderImplementation: string;
+  documentHeader: string;
+  documentImplementation: string;
+  documentView: string;
 }> {
   const root = await fixture();
   const options = {
@@ -96,6 +159,16 @@ async function patchedFixture(): Promise<{
     implementation: await readSource("Telegram/SourceFiles/storage/download_manager_mtproto.cpp"),
     helper: await readSource("Telegram/SourceFiles/crossgram/direct_download.cpp"),
     cloudFile: await readSource("Telegram/SourceFiles/data/data_cloud_file.cpp"),
+    fileLoader: await readSource("Telegram/SourceFiles/storage/file_download.h"),
+    mtprotoLoaderHeader: await readSource("Telegram/SourceFiles/storage/file_download_mtproto.h"),
+    mtprotoLoaderImplementation: await readSource(
+      "Telegram/SourceFiles/storage/file_download_mtproto.cpp",
+    ),
+    documentHeader: await readSource("Telegram/SourceFiles/data/data_document.h"),
+    documentImplementation: await readSource("Telegram/SourceFiles/data/data_document.cpp"),
+    documentView: await readSource(
+      "Telegram/SourceFiles/history/view/media/history_view_document.cpp",
+    ),
   };
 }
 
@@ -146,11 +219,100 @@ describe("Desktop direct-download patch e2e", () => {
   it("exposes transport state, coalesces URL resolution, and cancels the shared HTTP transfer", async () => {
     const { header, implementation } = await patchedFixture();
     expect(header).toContain("QString crossgramDownloadTransport() const;");
+    expect(header).toContain("bool _directCandidate = false;");
     expect(header).toContain("QNetworkReply *_directReply = nullptr;");
+    expect(implementation).toContain('return u"connecting"_q;');
+    expect(implementation).toContain("_directCandidate = true;");
     expect(implementation).toContain("_directUrlExpiresAt <= QDateTime::currentMSecsSinceEpoch()");
     expect(implementation).toContain("_directUrlExpiresAt = 0;");
     expect(implementation).toContain("if (_directResolving)");
     expect(implementation).toContain("if (requestId < 0)");
     expect(implementation).toContain("reply->abort();");
+  });
+
+  it("migrates transport state when reapplied over the previous direct-download patch", async () => {
+    const root = await fixture();
+    const options = {
+      root,
+      target: targetById("tdesktop"),
+      featureRoot: path.resolve("features/direct-download"),
+    };
+    await patchDirectDownload(options);
+    const headerPath = path.join(
+      root,
+      "Telegram",
+      "SourceFiles",
+      "storage",
+      "download_manager_mtproto.h",
+    );
+    const implementationPath = path.join(
+      root,
+      "Telegram",
+      "SourceFiles",
+      "storage",
+      "download_manager_mtproto.cpp",
+    );
+    const previousHeader = (await readFile(headerPath, "utf8"))
+      .replace("	bool _directCandidate = false;\n", "");
+    const previousImplementation = (await readFile(implementationPath, "utf8"))
+      .replace(
+        `QString DownloadMtprotoTask::crossgramDownloadTransport() const {
+	if (!_directCandidate) {
+		return QString();
+	} else if (_directResolving) {
+		return u"connecting"_q;
+	}
+	return (!_directDisabled
+		&& !_directUrl.isEmpty()
+		&& _directUrlExpiresAt > QDateTime::currentMSecsSinceEpoch())
+		? u"direct"_q
+		: u"relay"_q;
+}`,
+        `QString DownloadMtprotoTask::crossgramDownloadTransport() const {
+	return (!_directDisabled
+		&& !_directUrl.isEmpty()
+		&& _directUrlExpiresAt > QDateTime::currentMSecsSinceEpoch())
+		? u"direct"_q
+		: u"relay"_q;
+}`,
+      )
+      .replace("			_directCandidate = true;\n", "");
+    await writeFile(headerPath, previousHeader, "utf8");
+    await writeFile(implementationPath, previousImplementation, "utf8");
+
+    await patchDirectDownload(options);
+    const migratedHeader = await readFile(headerPath, "utf8");
+    const migratedImplementation = await readFile(implementationPath, "utf8");
+    expect(migratedHeader).toContain("bool _directCandidate = false;");
+    expect(migratedImplementation).toContain('return u"connecting"_q;');
+    expect(migratedImplementation).toContain("_directCandidate = true;");
+
+    await patchDirectDownload(options);
+    expect(await readFile(headerPath, "utf8")).toBe(migratedHeader);
+    expect(await readFile(implementationPath, "utf8")).toBe(migratedImplementation);
+  });
+
+  it("threads transport state through the file loader and draws a desktop badge", async () => {
+    const {
+      fileLoader,
+      mtprotoLoaderHeader,
+      mtprotoLoaderImplementation,
+      documentHeader,
+      documentImplementation,
+      documentView,
+    } = await patchedFixture();
+    expect(fileLoader).toContain("virtual QString crossgramDownloadTransport() const");
+    expect(mtprotoLoaderHeader).toContain("QString crossgramDownloadTransport() const override;");
+    expect(mtprotoLoaderImplementation).toContain(
+      "return DownloadMtprotoTask::crossgramDownloadTransport();",
+    );
+    expect(documentHeader).toContain("QString crossgramDownloadTransport() const;");
+    expect(documentImplementation).toContain("_loader->crossgramDownloadTransport()");
+    expect(documentView).toContain('u"直连"_q');
+    expect(documentView).toContain('u"中转"_q');
+    expect(documentView).toContain('u"连接中"_q');
+    expect(documentView).toContain("p.drawRoundedRect(badge");
+    expect(documentView.match(/const auto transport = _data->crossgramDownloadTransport\(\);/g))
+      .toHaveLength(1);
   });
 });
