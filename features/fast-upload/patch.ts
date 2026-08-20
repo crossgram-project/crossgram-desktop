@@ -30,6 +30,14 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
     );
   });
 
+  await context.edit(`${sourceRoot}/codegen/scheme/codegen_scheme.py`, (file) => {
+    file.insertAfter(
+      "    'messageReplies#81834865',",
+      "\n    'crossgram.prepareMediaUpload#f75adc0e',",
+      "crossgram.prepareMediaUpload#f75adc0e",
+    );
+  });
+
   await context.edit(`${sourceRoot}/storage/file_upload.h`, (file) => {
     file.insertAfter(
       "\tvoid maybeSend();",
@@ -83,7 +91,7 @@ bool Uploader::tryFastUpload(
 		return false;
 	}
 	if (!session().data().message(itemId)) return false;
-	crl::async([weak = make_weak(), itemId, file] {
+	crl::async([weak = base::make_weak(this), itemId, file] {
 		const auto hashes = Crossgram::FastUpload::HashPrepared(*file);
 		crl::on_main(weak, [=] {
 			const auto item = session().data().message(itemId);

@@ -17,6 +17,7 @@ async function patchedFixture(fixtureOptions: { directMaybeSend?: boolean } = {}
   roots.push(root);
   const source = path.join(root, "Telegram/SourceFiles");
   await Promise.all([
+    mkdir(path.join(source, "codegen/scheme"), { recursive: true }),
     mkdir(path.join(source, "mtproto/scheme"), { recursive: true }),
     mkdir(path.join(source, "storage"), { recursive: true }),
   ]);
@@ -27,6 +28,12 @@ async function patchedFixture(fixtureOptions: { directMaybeSend?: boolean } = {}
 `);
   await writeFile(path.join(source, "mtproto/scheme/api.tl"), `---functions---
 crossgram.getFileUrl#7520f6ea location:InputFileLocation = DataJSON;
+`);
+  await writeFile(path.join(source, "codegen/scheme/codegen_scheme.py"), `scheme = {
+  'typeIdExceptions': [
+    'messageReplies#81834865',
+  ],
+}
 `);
   await writeFile(path.join(source, "storage/file_upload.h"), `#pragma once
 struct FilePrepareResult;
@@ -63,6 +70,7 @@ ${queuedUpload}
   const read = (relative: string) => readFile(path.join(root, relative), "utf8");
   return {
     schema: await read("Telegram/SourceFiles/mtproto/scheme/api.tl"),
+    codegen: await read("Telegram/SourceFiles/codegen/scheme/codegen_scheme.py"),
     cmake: await read("Telegram/CMakeLists.txt"),
     header: await read("Telegram/SourceFiles/storage/file_upload.h"),
     implementation: await read("Telegram/SourceFiles/storage/file_upload.cpp"),
@@ -72,8 +80,9 @@ ${queuedUpload}
 
 describe("Desktop hash-first upload patch e2e", () => {
   it("installs the custom method and build sources exactly once", async () => {
-    const { schema, cmake } = await patchedFixture();
+    const { schema, codegen, cmake } = await patchedFixture();
     expect(schema.match(/crossgram\.prepareMediaUpload#f75adc0e/g)).toHaveLength(1);
+    expect(codegen.match(/crossgram\.prepareMediaUpload#f75adc0e/g)).toHaveLength(1);
     expect(cmake.match(/crossgram\/fast_upload\.cpp/g)).toHaveLength(1);
     expect(cmake.match(/crossgram\/fast_upload\.h/g)).toHaveLength(1);
   });
@@ -82,7 +91,7 @@ describe("Desktop hash-first upload patch e2e", () => {
     const { header, implementation } = await patchedFixture();
     expect(header).toContain("tryFastUpload(FullMsgId itemId");
     expect(implementation).toContain("MTPcrossgram_PrepareMediaUpload(");
-    expect(implementation).toContain("crl::async([weak = make_weak(), itemId, file]");
+    expect(implementation).toContain("crl::async([weak = base::make_weak(this), itemId, file]");
     expect(implementation).toContain("result.type() == mtpc_boolTrue");
     expect(implementation).toContain("finishFastUpload(itemId, file);");
     expect(implementation.match(/fallbackFastUpload\(itemId, file\);/g)).toHaveLength(3);
