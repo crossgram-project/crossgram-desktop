@@ -62,11 +62,31 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
 	}`;
     const queuedUploadDirectly = `	_queue.push_back({ itemId, file });
 	maybeSend();`;
-    file.replace(
-      file.has(queuedUploadWithTimer) ? queuedUploadWithTimer : queuedUploadDirectly,
-      `	if (!tryFastUpload(itemId, file)) {
+    const queuedUploadWithTranscode = `	_queue.push_back({ itemId, file });
+	if (preparing) {
+		_queue.back().preparing = true;
+		startTranscode(itemId);
+	} else if (!_nextTimer.isActive()) {
+		maybeSend();
+	}`;
+    const replacement = file.has(queuedUploadWithTranscode)
+      ? `	if (preparing) {
+		_queue.push_back({ itemId, file });
+		_queue.back().preparing = true;
+		startTranscode(itemId);
+	} else if (!tryFastUpload(itemId, file)) {
 		enqueueUpload(itemId, file);
-	}`,
+	}`
+      : `	if (!tryFastUpload(itemId, file)) {
+		enqueueUpload(itemId, file);
+	}`;
+    file.replace(
+      file.has(queuedUploadWithTranscode)
+        ? queuedUploadWithTranscode
+        : file.has(queuedUploadWithTimer)
+          ? queuedUploadWithTimer
+          : queuedUploadDirectly,
+      replacement,
       "tryFastUpload(itemId, file)",
     );
     file.insertAfterFunction(

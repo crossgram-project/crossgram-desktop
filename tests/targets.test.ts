@@ -127,6 +127,11 @@ describe("targets", () => {
     expect(release).toContain("cmake -B build . -DTG_OWT_DLOPEN_PIPEWIRE=ON");
     expect(release).toContain('"cmake --build build --parallel 1"');
     expect(release).toContain("max-parallelism = 2");
+    expect(release).toContain("release_optimization=-O3");
+    expect(release).toContain('if [ "$TARGET" = ayugram ]');
+    expect(release).toContain("release_optimization=-O2");
+    expect(release).toContain("CMAKE_C_FLAGS_RELEASE=$release_optimization");
+    expect(release).toContain("CMAKE_CXX_FLAGS_RELEASE=$release_optimization");
     expect(release).toContain("GlassOnTin/xcb-util-m4.git");
     expect(release).toContain("#if QT_CONFIG(xcb)");
     expect(release).toContain("submodule update --init --depth=1");

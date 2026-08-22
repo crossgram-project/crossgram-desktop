@@ -13,7 +13,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture(eol = "\n"): Promise<string> {
+async function fixture(eol = "\n", selectedItems = "getSelectedItems()"): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-drag-forward-"));
   roots.push(root);
   const source = path.join(root, "Telegram", "SourceFiles");
@@ -36,7 +36,7 @@ async function fixture(eol = "\n"): Promise<string> {
 `),
     write("Telegram/SourceFiles/history/history_inner_widget.cpp", `#include "history/history_inner_widget.h"
 void first() {
-				session().data().setMimeForwardIds(getSelectedItems());
+				session().data().setMimeForwardIds(${selectedItems});
 				mimeData->setData(u"application/x-td-forward"_q, "1");
 }
 void second() {
@@ -127,8 +127,8 @@ bool PhotoMedia::setToClipboard() {
   return root;
 }
 
-async function patched(eol = "\n") {
-  const root = await fixture(eol);
+async function patched(eol = "\n", selectedItems = "getSelectedItems()") {
+  const root = await fixture(eol, selectedItems);
   const options = {
     root,
     target: targetById("tdesktop"),
@@ -176,6 +176,12 @@ describe("Desktop cross-instance media drag patch", () => {
     }
     expect(history).toContain("result->setUrls(urls);");
     expect(history).toContain("std::move(photoData));\n\t\tif (!forwardIds.empty()) {");
+  });
+
+  it("supports the renamed selected-forward-items accessor", async () => {
+    const { history } = await patched("\n", "getSelectedForwardItems()");
+    expect(history).toContain("Crossgram::DragForward::Set(");
+    expect(history).not.toContain("getSelectedForwardItems()");
   });
 
   it("materializes complete multi-selections as an ordered local-file list", async () => {

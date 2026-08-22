@@ -12,7 +12,9 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function patchedFixture(fixtureOptions: { directMaybeSend?: boolean } = {}) {
+async function patchedFixture(
+  fixtureOptions: { directMaybeSend?: boolean; transcodeQueue?: boolean } = {},
+) {
   const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-fast-upload-"));
   roots.push(root);
   const source = path.join(root, "Telegram/SourceFiles");
@@ -44,10 +46,18 @@ private:
 };
 }
 `);
-  const queuedUpload = fixtureOptions.directMaybeSend
+  const queuedUpload = fixtureOptions.transcodeQueue
     ? `	_queue.push_back({ itemId, file });
+	if (preparing) {
+		_queue.back().preparing = true;
+		startTranscode(itemId);
+	} else if (!_nextTimer.isActive()) {
+		maybeSend();
+	}`
+    : fixtureOptions.directMaybeSend
+      ? `	_queue.push_back({ itemId, file });
 	maybeSend();`
-    : `	_queue.push_back({ itemId, file });
+      : `	_queue.push_back({ itemId, file });
 	if (!_nextTimer.isActive()) {
 		maybeSend();
 	}`;
@@ -107,6 +117,15 @@ describe("Desktop hash-first upload patch e2e", () => {
     expect(implementation).toContain("tryFastUpload(itemId, file)");
     expect(implementation).toContain("void Uploader::enqueueUpload(");
     expect(implementation.match(/_queue\.push_back\(\{ itemId, file \}\);/g)).toHaveLength(2);
+  });
+
+  it("preserves the upstream transcode queue before attempting fast upload", async () => {
+    const { implementation } = await patchedFixture({ transcodeQueue: true });
+    expect(implementation).toContain("if (preparing) {");
+    expect(implementation).toContain("_queue.back().preparing = true;");
+    expect(implementation).toContain("startTranscode(itemId);");
+    expect(implementation).toContain("} else if (!tryFastUpload(itemId, file)) {");
+    expect(implementation.match(/_queue\.push_back\(\{ itemId, file \}\);/g)).toHaveLength(3);
   });
 
   it("hashes memory and disk sources in one pass including first-10-MiB MD5", async () => {

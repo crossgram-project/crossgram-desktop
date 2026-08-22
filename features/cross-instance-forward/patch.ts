@@ -39,8 +39,11 @@ export async function patchCrossInstanceForward(options: PatchOptions): Promise<
         relative === "history/history_inner_widget.cpp"
         && file.text().includes("HistoryView::FillDragMimeWithPhoto(")
       ) {
+        const selectedItems = file.has("getSelectedForwardItems()")
+          ? "getSelectedForwardItems()"
+          : "getSelectedItems()";
         file.replace(
-          `session().data().setMimeForwardIds(getSelectedItems());
+          `session().data().setMimeForwardIds(${selectedItems});
 \t\t\t\tmimeData->setData(u"application/x-td-forward"_q, "1");`,
           `Crossgram::DragForward::Set(
 \t\t\t\t\tmimeData.get(),

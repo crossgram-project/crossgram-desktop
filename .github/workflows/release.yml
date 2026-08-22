@@ -500,6 +500,13 @@ jobs:
             effective_hash="$OVERRIDE_API_HASH"
           fi
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          release_optimization=-O3
+          if [ "$TARGET" = ayugram ]; then
+            # AyuGram's Linux translation units repeatedly exceed the hosted
+            # runner's six-hour job limit at -O3. -O2 preserves optimized
+            # release builds while substantially reducing compiler work.
+            release_optimization=-O2
+          fi
           for index in "${!brands[@]}"; do
             brand="${brands[$index]}"
             if [ "$index" -gt 0 ]; then apply_brand "$brand" true; fi
@@ -516,8 +523,8 @@ jobs:
               -Wno-error=policy \
               -Wno-error=install-absolute-destination \
               -D CMAKE_CONFIGURATION_TYPES=Release \
-              -D "CMAKE_C_FLAGS_RELEASE=-O3 -DNDEBUG -DQT_NO_DEBUG" \
-              -D "CMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG -DQT_NO_DEBUG" \
+              -D "CMAKE_C_FLAGS_RELEASE=$release_optimization -DNDEBUG -DQT_NO_DEBUG" \
+              -D "CMAKE_CXX_FLAGS_RELEASE=$release_optimization -DNDEBUG -DQT_NO_DEBUG" \
               -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
               -D "TDESKTOP_API_ID=$effective_id" \
               -D "TDESKTOP_API_HASH=$effective_hash"
