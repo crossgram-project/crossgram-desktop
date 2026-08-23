@@ -81,6 +81,10 @@ describe("targets", () => {
     ]);
     expect(brandBatches.every(({ brands }) => brands.length <= 2)).toBe(true);
     expect(release).toContain("name: Publish one unified release");
+    expect(release).toContain("github.event_name == 'schedule'");
+    expect(release).toContain("inputs.platforms == 'all'");
+    expect(release).toContain("inputs.target == 'all'");
+    expect(release).toContain("inputs.brands == 'all'");
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
     expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");
     expect(release).not.toContain('release_tag="crossgram/$TARGET/');

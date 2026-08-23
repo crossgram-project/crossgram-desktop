@@ -767,7 +767,12 @@ jobs:
 
   publish:
     name: Publish one unified release
-    if: always()
+    if: >-
+      always() &&
+      (github.event_name == 'schedule' ||
+       (inputs.platforms == 'all' &&
+        inputs.target == 'all' &&
+        inputs.brands == 'all'))
     needs: build
     runs-on: ubuntu-latest
     steps:
