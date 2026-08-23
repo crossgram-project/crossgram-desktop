@@ -503,9 +503,9 @@ jobs:
           release_optimization=-O3
           if [ "$TARGET" = ayugram ]; then
             # AyuGram's Linux translation units repeatedly exceed the hosted
-            # runner's six-hour job limit at -O3. -O2 preserves optimized
-            # release builds while substantially reducing compiler work.
-            release_optimization=-O2
+            # runner's six-hour job limit even at -O2. -O1 keeps an optimized
+            # release build while leaving enough time for linking and packaging.
+            release_optimization=-O1
           fi
           for index in "${!brands[@]}"; do
             brand="${brands[$index]}"
