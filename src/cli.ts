@@ -10,6 +10,7 @@ import { patchDirectDownload } from "../features/direct-download/patch.js";
 import { patchFastUpload } from "../features/fast-upload/patch.js";
 import { patchCrossInstanceForward } from "../features/cross-instance-forward/patch.js";
 import { patchRawAnimation } from "../features/raw-animation/patch.js";
+import { patchMergedForward } from "../features/merged-forward/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
 import { resolveFeatures } from "./features.js";
@@ -90,6 +91,11 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       root: values.root!,
       target,
       featureRoot: resolve(repositoryRoot, "features/raw-animation"),
+    });
+    await patchMergedForward({
+      root: values.root!,
+      target,
+      featureRoot: resolve(repositoryRoot, "features/merged-forward"),
     });
     await patchBranding({
       root: values.root!,
