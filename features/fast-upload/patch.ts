@@ -44,15 +44,9 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
       `
 	void enqueueUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
 	[[nodiscard]] bool tryFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
-	void finishFastUploadProgress(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
 	void finishFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
-	void fallbackFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file, bool prepared = false);`,
+	void fallbackFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);`,
       "tryFastUpload(FullMsgId itemId",
-    );
-    file.insertAfter(
-      "\tstd::vector<Entry> _queue;",
-      "\n\tbase::flat_set<FullMsgId> _crossgramMainDcUploads;",
-      "_crossgramMainDcUploads",
     );
   });
 
@@ -144,7 +138,7 @@ bool Uploader::tryFastUpload(
 				if (result.type() == mtpc_boolTrue) {
 					weak->finishFastUpload(itemId, file);
 				} else {
-					weak->fallbackFastUpload(itemId, file, true);
+					weak->fallbackFastUpload(itemId, file);
 				}
 			}).fail([weak, itemId, file](const MTP::Error &) {
 				if (weak) weak->fallbackFastUpload(itemId, file);
@@ -163,77 +157,15 @@ void Uploader::finishFastUpload(
 	entry.docPartsSent = entry.docPartsCount;
 	entry.sentSize = entry.file->partssize;
 	entry.docSentSize = entry.docSize;
-	finishFastUploadProgress(itemId, file);
 	maybeFinishFront();
-}
-
-void Uploader::finishFastUploadProgress(
-		FullMsgId itemId,
-		const std::shared_ptr<FilePrepareResult> &file) {
-	if (file->type == SendMediaType::Photo) {
-		const auto photo = session().data().photo(file->id);
-		if (photo->uploading()) {
-			photo->uploadingData->size = file->partssize;
-			photo->uploadingData->offset = file->partssize;
-		}
-		_photoProgress.fire_copy(itemId);
-	} else if (file->type == SendMediaType::File
-		|| file->type == SendMediaType::ThemeFile
-		|| file->type == SendMediaType::Audio
-		|| file->type == SendMediaType::Round) {
-		const auto document = session().data().document(file->id);
-		if (document->uploading()) {
-			document->uploadingData->offset = document->uploadingData->size;
-		}
-		_documentProgress.fire_copy(itemId);
-	}
 }
 
 void Uploader::fallbackFastUpload(
 		FullMsgId itemId,
-		const std::shared_ptr<FilePrepareResult> &file,
-		bool prepared) {
+		const std::shared_ptr<FilePrepareResult> &file) {
 	enqueueUpload(itemId, file);
-	if (prepared) _crossgramMainDcUploads.emplace(itemId);
 }`,
       "bool Uploader::tryFastUpload(",
-    );
-
-    const regularRequest = `\tconst auto requestId = _api->request(
-\t\tstd::move(prepared)
-\t).done([=](const MTPBool &result, mtpRequestId requestId) {
-\t\tpartLoaded(result, requestId);
-\t}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
-\t\tpartFailed(error, requestId);
-\t}).toDC(MTP::uploadDcId(request.dcIndex)).send();`;
-    file.replace(
-      regularRequest,
-      `\tauto sender = _api->request(
-\t\tstd::move(prepared)
-\t).done([=](const MTPBool &result, mtpRequestId requestId) {
-\t\tpartLoaded(result, requestId);
-\t}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
-\t\tpartFailed(error, requestId);
-\t});
-\tconst auto requestId = _crossgramMainDcUploads.contains(request.itemId)
-\t\t? sender.send()
-\t\t: sender.toDC(MTP::uploadDcId(request.dcIndex)).send();`,
-      "_crossgramMainDcUploads.contains(request.itemId)",
-    );
-    file.insertAfter(
-      "\tauto entry = std::move(_queue.front());\n\t_queue.erase(_queue.begin());",
-      "\n\t_crossgramMainDcUploads.remove(entry.itemId);",
-      "_crossgramMainDcUploads.remove(entry.itemId);",
-    );
-    file.insertAfter(
-      "\t_queue.clear();",
-      "\n\t_crossgramMainDcUploads.clear();",
-      "_crossgramMainDcUploads.clear();",
-    );
-    file.insertAfter(
-      "\t\t_queue.erase(i);\n\t\tnotifyFailed(entry);",
-      "\n\t\t_crossgramMainDcUploads.remove(itemId);",
-      "_crossgramMainDcUploads.remove(itemId);",
     );
   });
 }

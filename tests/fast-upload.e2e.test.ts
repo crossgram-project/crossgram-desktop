@@ -42,10 +42,7 @@ struct FilePrepareResult;
 namespace Storage {
 class Uploader {
 private:
-	struct Entry;
-	struct Request;
 	void maybeSend();
-	std::vector<Entry> _queue;
 };
 }
 `);
@@ -70,39 +67,6 @@ void Uploader::upload(
 		FullMsgId itemId,
 		const std::shared_ptr<FilePrepareResult> &file) {
 ${queuedUpload}
-}
-
-template <typename Prepared>
-void Uploader::sendPreparedRequest(Prepared &&prepared, Request &&request) {
-	const auto requestId = _api->request(
-		std::move(prepared)
-	).done([=](const MTPBool &result, mtpRequestId requestId) {
-		partLoaded(result, requestId);
-	}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
-		partFailed(error, requestId);
-	}).toDC(MTP::uploadDcId(request.dcIndex)).send();
-}
-
-void Uploader::failed(FullMsgId itemId) {
-	const auto i = ranges::find(_queue, itemId, &Entry::itemId);
-	if (i != end(_queue)) {
-		const auto entry = std::move(*i);
-		_queue.erase(i);
-		notifyFailed(entry);
-	}
-}
-
-void Uploader::clear() {
-	for (auto &entry : _queue) {
-		if (entry.cancelPreparing) entry.cancelPreparing->store(true);
-	}
-	_transcodeQueue.clear();
-	_queue.clear();
-}
-
-void Uploader::finishFront() {
-	auto entry = std::move(_queue.front());
-	_queue.erase(_queue.begin());
 }
 }
 `);
@@ -144,35 +108,8 @@ describe("Desktop hash-first upload patch e2e", () => {
     expect(implementation).toContain("if (!weak) return;");
     expect(implementation).toContain("weak->finishFastUpload(itemId, file);");
     expect(implementation).toContain("result.type() == mtpc_boolTrue");
-    expect(implementation.match(/weak->fallbackFastUpload\(itemId, file\);/g)).toHaveLength(2);
-    expect(implementation).toContain("weak->fallbackFastUpload(itemId, file, true);");
+    expect(implementation.match(/weak->fallbackFastUpload\(itemId, file\);/g)).toHaveLength(3);
     expect(implementation).toContain("enqueueUpload(itemId, file);");
-  });
-
-  it("finishes optimistic photo and document progress before publishing uploaded media", async () => {
-    const { header, implementation } = await patchedFixture();
-    expect(header).toContain("finishFastUploadProgress(FullMsgId itemId");
-    expect(implementation).toContain("void Uploader::finishFastUploadProgress(");
-    expect(implementation).toContain("photo->uploadingData->offset = file->partssize;");
-    expect(implementation).toContain("_photoProgress.fire_copy(itemId);");
-    expect(implementation).toContain("document->uploadingData->offset = document->uploadingData->size;");
-    expect(implementation).toContain("_documentProgress.fire_copy(itemId);");
-    expect(implementation.indexOf("finishFastUploadProgress(itemId, file);")).toBeLessThan(
-      implementation.indexOf("maybeFinishFront();", implementation.indexOf("void Uploader::finishFastUpload(")),
-    );
-  });
-
-  it("keeps prepared Crossgram part uploads on the already-connected main DC", async () => {
-    const { header, implementation } = await patchedFixture();
-    expect(header).toContain("base::flat_set<FullMsgId> _crossgramMainDcUploads;");
-    expect(implementation).toContain("weak->fallbackFastUpload(itemId, file, true);");
-    expect(implementation).toContain("_crossgramMainDcUploads.emplace(itemId);");
-    expect(implementation).toContain("_crossgramMainDcUploads.contains(request.itemId)");
-    expect(implementation).toContain("? sender.send()");
-    expect(implementation).toContain(": sender.toDC(MTP::uploadDcId(request.dcIndex)).send();");
-    expect(implementation).toContain("_crossgramMainDcUploads.remove(entry.itemId);");
-    expect(implementation).toContain("_crossgramMainDcUploads.remove(itemId);");
-    expect(implementation).toContain("_crossgramMainDcUploads.clear();");
   });
 
   it("supports upstreams that call maybeSend directly after queueing", async () => {
