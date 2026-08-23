@@ -46,8 +46,13 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
 	[[nodiscard]] bool tryFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
 	void finishFastUploadProgress(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
 	void finishFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
-	void fallbackFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);`,
+	void fallbackFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file, bool prepared = false);`,
       "tryFastUpload(FullMsgId itemId",
+    );
+    file.insertAfter(
+      "\tstd::vector<Entry> _queue;",
+      "\n\tbase::flat_set<FullMsgId> _crossgramMainDcUploads;",
+      "_crossgramMainDcUploads",
     );
   });
 
@@ -139,7 +144,7 @@ bool Uploader::tryFastUpload(
 				if (result.type() == mtpc_boolTrue) {
 					weak->finishFastUpload(itemId, file);
 				} else {
-					weak->fallbackFastUpload(itemId, file);
+					weak->fallbackFastUpload(itemId, file, true);
 				}
 			}).fail([weak, itemId, file](const MTP::Error &) {
 				if (weak) weak->fallbackFastUpload(itemId, file);
@@ -186,10 +191,49 @@ void Uploader::finishFastUploadProgress(
 
 void Uploader::fallbackFastUpload(
 		FullMsgId itemId,
-		const std::shared_ptr<FilePrepareResult> &file) {
+		const std::shared_ptr<FilePrepareResult> &file,
+		bool prepared) {
 	enqueueUpload(itemId, file);
+	if (prepared) _crossgramMainDcUploads.emplace(itemId);
 }`,
       "bool Uploader::tryFastUpload(",
+    );
+
+    const regularRequest = `\tconst auto requestId = _api->request(
+\t\tstd::move(prepared)
+\t).done([=](const MTPBool &result, mtpRequestId requestId) {
+\t\tpartLoaded(result, requestId);
+\t}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
+\t\tpartFailed(error, requestId);
+\t}).toDC(MTP::uploadDcId(request.dcIndex)).send();`;
+    file.replace(
+      regularRequest,
+      `\tauto sender = _api->request(
+\t\tstd::move(prepared)
+\t).done([=](const MTPBool &result, mtpRequestId requestId) {
+\t\tpartLoaded(result, requestId);
+\t}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
+\t\tpartFailed(error, requestId);
+\t});
+\tconst auto requestId = _crossgramMainDcUploads.contains(request.itemId)
+\t\t? sender.send()
+\t\t: sender.toDC(MTP::uploadDcId(request.dcIndex)).send();`,
+      "_crossgramMainDcUploads.contains(request.itemId)",
+    );
+    file.insertAfter(
+      "\tauto entry = std::move(_queue.front());\n\t_queue.erase(_queue.begin());",
+      "\n\t_crossgramMainDcUploads.remove(entry.itemId);",
+      "_crossgramMainDcUploads.remove(entry.itemId);",
+    );
+    file.insertAfter(
+      "void Uploader::clear() {\n\t_queue.clear();",
+      "\n\t_crossgramMainDcUploads.clear();",
+      "_crossgramMainDcUploads.clear();",
+    );
+    file.insertAfter(
+      "\t\t_queue.erase(i);\n\t\tnotifyFailed(entry);",
+      "\n\t\t_crossgramMainDcUploads.remove(itemId);",
+      "_crossgramMainDcUploads.remove(itemId);",
     );
   });
 }
