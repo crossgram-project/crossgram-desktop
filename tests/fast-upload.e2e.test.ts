@@ -93,6 +93,10 @@ void Uploader::failed(FullMsgId itemId) {
 }
 
 void Uploader::clear() {
+	for (auto &entry : _queue) {
+		if (entry.cancelPreparing) entry.cancelPreparing->store(true);
+	}
+	_transcodeQueue.clear();
 	_queue.clear();
 }
 

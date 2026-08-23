@@ -226,7 +226,7 @@ void Uploader::fallbackFastUpload(
       "_crossgramMainDcUploads.remove(entry.itemId);",
     );
     file.insertAfter(
-      "void Uploader::clear() {\n\t_queue.clear();",
+      "\t_queue.clear();",
       "\n\t_crossgramMainDcUploads.clear();",
       "_crossgramMainDcUploads.clear();",
     );
