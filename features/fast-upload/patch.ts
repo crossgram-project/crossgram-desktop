@@ -44,6 +44,7 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
       `
 	void enqueueUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
 	[[nodiscard]] bool tryFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
+	void finishFastUploadProgress(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
 	void finishFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);
 	void fallbackFastUpload(FullMsgId itemId, const std::shared_ptr<FilePrepareResult> &file);`,
       "tryFastUpload(FullMsgId itemId",
@@ -157,7 +158,30 @@ void Uploader::finishFastUpload(
 	entry.docPartsSent = entry.docPartsCount;
 	entry.sentSize = entry.file->partssize;
 	entry.docSentSize = entry.docSize;
+	finishFastUploadProgress(itemId, file);
 	maybeFinishFront();
+}
+
+void Uploader::finishFastUploadProgress(
+		FullMsgId itemId,
+		const std::shared_ptr<FilePrepareResult> &file) {
+	if (file->type == SendMediaType::Photo) {
+		const auto photo = session().data().photo(file->id);
+		if (photo->uploading()) {
+			photo->uploadingData->size = file->partssize;
+			photo->uploadingData->offset = file->partssize;
+		}
+		_photoProgress.fire_copy(itemId);
+	} else if (file->type == SendMediaType::File
+		|| file->type == SendMediaType::ThemeFile
+		|| file->type == SendMediaType::Audio
+		|| file->type == SendMediaType::Round) {
+		const auto document = session().data().document(file->id);
+		if (document->uploading()) {
+			document->uploadingData->offset = document->uploadingData->size;
+		}
+		_documentProgress.fire_copy(itemId);
+	}
 }
 
 void Uploader::fallbackFastUpload(

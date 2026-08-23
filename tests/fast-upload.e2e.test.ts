@@ -112,6 +112,19 @@ describe("Desktop hash-first upload patch e2e", () => {
     expect(implementation).toContain("enqueueUpload(itemId, file);");
   });
 
+  it("finishes optimistic photo and document progress before publishing uploaded media", async () => {
+    const { header, implementation } = await patchedFixture();
+    expect(header).toContain("finishFastUploadProgress(FullMsgId itemId");
+    expect(implementation).toContain("void Uploader::finishFastUploadProgress(");
+    expect(implementation).toContain("photo->uploadingData->offset = file->partssize;");
+    expect(implementation).toContain("_photoProgress.fire_copy(itemId);");
+    expect(implementation).toContain("document->uploadingData->offset = document->uploadingData->size;");
+    expect(implementation).toContain("_documentProgress.fire_copy(itemId);");
+    expect(implementation.indexOf("finishFastUploadProgress(itemId, file);")).toBeLessThan(
+      implementation.indexOf("maybeFinishFront();", implementation.indexOf("void Uploader::finishFastUpload(")),
+    );
+  });
+
   it("supports upstreams that call maybeSend directly after queueing", async () => {
     const { implementation } = await patchedFixture({ directMaybeSend: true });
     expect(implementation).toContain("tryFastUpload(itemId, file)");
