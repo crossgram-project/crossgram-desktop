@@ -86,7 +86,8 @@ describe("targets", () => {
     expect(release).toContain("inputs.target == 'all'");
     expect(release).toContain("inputs.brands == 'all'");
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
-    expect(release).toContain("secrets.CROSSGRAM_RELEASE_TOKEN || github.token");
+    expect(release).toContain("GH_TOKEN: ${{ github.token }}");
+    expect(release).not.toContain("CROSSGRAM_RELEASE_TOKEN");
     expect(release).not.toContain('release_tag="crossgram/$TARGET/');
     expect(release).toContain("desktop-app/rnnoise.git");
     expect(release).toContain("generated Dockerfile does not contain the expected rnnoise source");
