@@ -78,6 +78,43 @@ if safe not in text:
 """,
     encoding="utf-8",
 )
+apng_chunks_helper = path.with_name("patch_ffmpeg_apng_chunks.py")
+apng_chunks_helper.write_text(
+    '''#!/usr/bin/env python3
+from pathlib import Path
+import sys
+
+if len(sys.argv) != 2:
+    raise SystemExit("usage: patch_ffmpeg_apng_chunks.py <libavformat/apngdec.c>")
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+before = """        /* fcTL must precede fdAT or IDAT */
+        len = avio_rb32(pb);
+        tag = avio_rl32(pb);
+        if (len > 0x7fffffff ||
+            tag != MKTAG('f', 'd', 'A', 'T') &&
+            tag != MKTAG('I', 'D', 'A', 'T'))
+            return AVERROR_INVALIDDATA;
+"""
+after = """        /* fcTL may be followed by other chunks before fdAT or IDAT */
+        len = avio_rb32(pb);
+        tag = avio_rl32(pb);
+        if (len > 0x7fffffff)
+            return AVERROR_INVALIDDATA;
+
+        /* check for empty frame */
+        if (tag == MKTAG('f', 'c', 'T', 'L') ||
+            tag == MKTAG('I', 'E', 'N', 'D'))
+            return AVERROR_INVALIDDATA;
+"""
+if after not in text:
+    if text.count(before) != 1:
+        raise RuntimeError("expected the FFmpeg 6.1 APNG frame-chunk gate")
+    path.write_text(text.replace(before, after), encoding="utf-8")
+''',
+    encoding="utf-8",
+)
 archive_install = (
     "zlib_library=\n"
     "for candidate in \\\n"
@@ -131,6 +168,13 @@ if archive_install.strip() not in text:
         + archive_install
         + "\n",
     )
+text = insert_before(
+    text,
+    "./configure --prefix=",
+    "# FFmpeg 6.1 rejects valid APNG files that carry ancillary chunks such\n"
+    "# as tEXt between fcTL and IDAT. Backport the upstream demuxer fix.\n"
+    "python \"$FullScriptPath/patch_ffmpeg_apng_chunks.py\" libavformat/apngdec.c\n\n",
+)
 text = insert_before(
     text,
     "./configure --prefix=",

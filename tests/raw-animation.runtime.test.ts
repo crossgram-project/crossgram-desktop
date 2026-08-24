@@ -7,13 +7,14 @@ import { describe, expect, it } from "vitest";
 const fixtures = path.resolve("tests/fixtures/raw-animation");
 const frameBytes = 16 * 16 * 4;
 
-function decodedFrames(file: string): Buffer[] {
+function decodedCycle(file: string): Buffer[] {
   const result = spawnSync("ffmpeg", [
     "-v", "error",
-    // This is the same demuxer option installed in TDesktop's clip reader.
-    "-ignore_loop", "0",
+    // Keep the image demuxer single-pass. TDesktop's clip reader owns the
+    // loop boundary and seeks plus flushes the decoder before the next pass.
+    "-ignore_loop", "1",
     "-i", path.join(fixtures, file),
-    "-frames:v", "3",
+    "-frames:v", "2",
     "-vsync", "0",
     "-f", "rawvideo",
     "-pix_fmt", "rgba",
@@ -26,11 +27,19 @@ function decodedFrames(file: string): Buffer[] {
   if (result.status !== 0) {
     throw new Error(`ffmpeg exited with ${result.status}: ${result.stderr.toString("utf8")}`);
   }
-  expect(result.stdout.byteLength).toBe(frameBytes * 3);
-  return [0, 1, 2].map((index) => result.stdout.subarray(
+  expect(result.stdout.byteLength).toBe(frameBytes * 2);
+  return [0, 1].map((index) => result.stdout.subarray(
     index * frameBytes,
     (index + 1) * frameBytes,
   ));
+}
+
+function decodedFrames(file: string): Buffer[] {
+  const first = decodedCycle(file);
+  // A second independent pass models the clip reader's EOF path after it
+  // seeks to the start and calls avcodec_flush_buffers().
+  const restarted = decodedCycle(file);
+  return [first[0]!, first[1]!, restarted[0]!];
 }
 
 function checksum(frame: Buffer): string {

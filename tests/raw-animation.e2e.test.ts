@@ -246,6 +246,8 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(helper).toContain("Crossgram MSVC");
     expect(helper).toContain("re.compile");
     expect(helper).toContain("sanitize_zconf_msvc.py");
+    expect(helper).toContain("patch_ffmpeg_apng_chunks.py");
+    expect(helper).toContain("fcTL may be followed by other chunks");
     expect(helper).toContain("../local/lib/zlib.lib");
     expect(helper).toContain("../local/lib/pkgconfig/zlib.pc");
     expect(helper).toContain('Libs: -L\\\\${libdir} -lz');
@@ -297,6 +299,7 @@ describe("Desktop raw GIF/APNG animation patch", () => {
     expect(windows.match(/\.\.\/zlib\/zconf\.h\.in/g)).toHaveLength(1);
     expect(windows).not.toContain('../zlib/zconf.h"');
     expect(windows).toContain("sanitize_zconf_msvc.py");
+    expect(windows).toContain("patch_ffmpeg_apng_chunks.py");
     expect(windows).toContain("ffbuild/config.log");
     expect(windows).toContain('install -m 0644 "$zlib_library"');
     expect(windows.match(/\.\.\/local\/lib\/zlib\.lib/g)).toHaveLength(1);
@@ -499,7 +502,7 @@ make -j$NUMBER_OF_PROCESSORS
     expect(source.match(/const auto rawImageAnimation = isAnimation\(\)/g)).toHaveLength(1);
   });
 
-  it("configures the shared FFmpeg clip reader to loop GIF/APNG and preserve RGBA alpha", async () => {
+  it("keeps GIF/APNG looping in the clip reader and preserves RGBA alpha", async () => {
     const root = await fixture();
     await patch(root);
     const cpp = await readFile(path.join(
@@ -511,12 +514,74 @@ make -j$NUMBER_OF_PROCESSORS
       "Telegram/SourceFiles/media/clip/media_clip_ffmpeg.h",
     ), "utf8");
 
-    expect(cpp).toContain('av_dict_set(&options, "ignore_loop", "0", 0)');
-    expect(cpp).toContain("avformat_open_input(&_fmtContext, nullptr, nullptr, &options)");
+    expect(cpp).toContain("avformat_open_input(&_fmtContext, nullptr, nullptr, nullptr)");
+    expect(cpp).not.toContain("ignore_loop");
     expect(cpp).toContain("av_pix_fmt_desc_get(AVPixelFormat(format))");
     expect(cpp).toContain("AV_PIX_FMT_FLAG_ALPHA");
     expect(header).toContain("#include <libavutil/pixdesc.h>");
-    expect(cpp.match(/ignore_loop/g)).toHaveLength(1);
+  });
+
+  it("backports FFmpeg support for ancillary chunks before APNG frame data", async () => {
+    const root = await fixture();
+    await patch(root);
+    const windowsBuild = path.join(root, "Telegram/build/patches/build_ffmpeg_win.sh");
+    const helper = path.join(root, "Telegram/build/prepare/enable_ffmpeg_apng.py");
+    const generated = spawnSync("python", [helper, windowsBuild], { encoding: "utf8" });
+    expect(generated.status, generated.stderr).toBe(0);
+
+    const apngHelper = path.join(
+      root,
+      "Telegram/build/patches/patch_ffmpeg_apng_chunks.py",
+    );
+    const source = path.join(root, "apngdec.c");
+    await writeFile(source, `        /* fcTL must precede fdAT or IDAT */
+        len = avio_rb32(pb);
+        tag = avio_rl32(pb);
+        if (len > 0x7fffffff ||
+            tag != MKTAG('f', 'd', 'A', 'T') &&
+            tag != MKTAG('I', 'D', 'A', 'T'))
+            return AVERROR_INVALIDDATA;
+`, "utf8");
+    for (let pass = 0; pass < 2; pass++) {
+      const applied = spawnSync("python", [apngHelper, source], { encoding: "utf8" });
+      expect(applied.status, applied.stderr).toBe(0);
+    }
+    const patched = await readFile(source, "utf8");
+    expect(patched).toContain("fcTL may be followed by other chunks before fdAT or IDAT");
+    expect(patched).toContain("check for empty frame");
+    expect(patched).not.toContain("fcTL must precede fdAT or IDAT");
+    expect(patched.match(/fcTL may be followed/g)).toHaveLength(1);
+  });
+
+  it("removes the previous demuxer-managed loop from already-patched trees", async () => {
+    const root = await fixture();
+    const filename = path.join(
+      root,
+      "Telegram/SourceFiles/media/clip/media_clip_ffmpeg.cpp",
+    );
+    const source = await readFile(filename, "utf8");
+    await writeFile(filename, source.replace(
+      `\tif ((res = avformat_open_input(&_fmtContext, nullptr, nullptr, nullptr)) < 0) {
+\t\t_ioBuffer = nullptr;`,
+      `\tauto options = static_cast<AVDictionary*>(nullptr);
+\t// Stickers and GIF messages always loop in the UI. Let the GIF/APNG
+\t// demuxers replay their native animation instead of relying on seeking,
+\t// which is not reliable for every APNG stream.
+\tav_dict_set(&options, "ignore_loop", "0", 0);
+\tres = avformat_open_input(&_fmtContext, nullptr, nullptr, &options);
+\tav_dict_free(&options);
+\tif (res < 0) {
+\t\t_ioBuffer = nullptr;`,
+    ), "utf8");
+
+    await patch(root);
+    const upgraded = await readFile(filename, "utf8");
+    expect(upgraded).not.toContain("ignore_loop");
+    expect(upgraded).not.toContain("AVDictionary");
+    expect(upgraded).toContain(
+      "avformat_open_input(&_fmtContext, nullptr, nullptr, nullptr)",
+    );
+    expect(upgraded.match(/avformat_open_input/g)).toHaveLength(1);
   });
 
   it("premultiplies every alpha-bearing format in the sticker frame generator", async () => {

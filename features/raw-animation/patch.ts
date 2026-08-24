@@ -230,10 +230,16 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   });
 
   await context.edit(`${sourceRoot}/media/clip/media_clip_ffmpeg.cpp`, (file) => {
-    file.replace(
-      `\tif ((res = avformat_open_input(&_fmtContext, nullptr, nullptr, nullptr)) < 0) {
-\t\t_ioBuffer = nullptr;`,
-      `\tauto options = static_cast<AVDictionary*>(nullptr);
+    // Older Crossgram patches enabled FFmpeg's native GIF/APNG loop. With
+    // the bundled FFmpeg 6.1 decoder, some APNGs reject the first packet of
+    // the second demuxer-managed cycle with EINVAL and disappear after one
+    // pass. The clip reader already owns the loop boundary: on EOF it seeks,
+    // flushes the decoder, and resets timing. Keep the demuxer at its default
+    // single-pass behavior so that reset happens before another packet is
+    // submitted. This conditional replacement upgrades already-patched trees.
+    if (file.has('av_dict_set(&options, "ignore_loop", "0", 0)')) {
+      file.replace(
+        `\tauto options = static_cast<AVDictionary*>(nullptr);
 \t// Stickers and GIF messages always loop in the UI. Let the GIF/APNG
 \t// demuxers replay their native animation instead of relying on seeking,
 \t// which is not reliable for every APNG stream.
@@ -242,8 +248,11 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
 \tav_dict_free(&options);
 \tif (res < 0) {
 \t\t_ioBuffer = nullptr;`,
-      'av_dict_set(&options, "ignore_loop", "0", 0)',
-    );
+        `\tif ((res = avformat_open_input(&_fmtContext, nullptr, nullptr, nullptr)) < 0) {
+\t\t_ioBuffer = nullptr;`,
+        "avformat_open_input(&_fmtContext, nullptr, nullptr, nullptr)",
+      );
+    }
 
     file.replace(
       `\tconst auto bgra = (format == AV_PIX_FMT_BGRA);
