@@ -91,8 +91,8 @@ ${queuedUpload}
 describe("Desktop hash-first upload patch e2e", () => {
   it("installs the custom method and build sources exactly once", async () => {
     const { schema, codegen, cmake } = await patchedFixture();
-    expect(schema.match(/crossgram\.prepareMediaUpload#f75adc0e/g)).toHaveLength(1);
-    expect(codegen.match(/crossgram\.prepareMediaUpload#f75adc0e/g)).toHaveLength(1);
+    expect(schema.match(/crossgram\.prepareMediaUploadV2#f75adc0f/g)).toHaveLength(1);
+    expect(codegen.match(/crossgram\.prepareMediaUploadV2#f75adc0f/g)).toHaveLength(1);
     expect(cmake.match(/crossgram\/fast_upload\.cpp/g)).toHaveLength(1);
     expect(cmake.match(/crossgram\/fast_upload\.h/g)).toHaveLength(1);
   });
@@ -100,11 +100,11 @@ describe("Desktop hash-first upload patch e2e", () => {
   it("queries the hash cache before part upload and falls back on misses or RPC errors", async () => {
     const { header, implementation } = await patchedFixture();
     expect(header).toContain("tryFastUpload(FullMsgId itemId");
-    expect(implementation).toContain("MTPcrossgram_PrepareMediaUpload(");
+    expect(implementation).toContain("MTPcrossgram_PrepareMediaUploadV2(");
     expect(implementation).toContain("crl::async([weak = base::make_weak(this), itemId, file]");
     expect(implementation).toContain("crl::on_main(weak, [weak, itemId, file, hashes]");
     expect(implementation).toContain("weak->session().data().message(itemId)");
-    expect(implementation).toContain("weak->_api->request(MTPcrossgram_PrepareMediaUpload(");
+    expect(implementation).toContain("weak->_api->request(MTPcrossgram_PrepareMediaUploadV2(");
     expect(implementation).toContain("if (!weak) return;");
     expect(implementation).toContain("weak->finishFastUpload(itemId, file);");
     expect(implementation).toContain("result.type() == mtpc_boolTrue");
@@ -132,6 +132,9 @@ describe("Desktop hash-first upload patch e2e", () => {
     const { helper } = await patchedFixture();
     expect(helper).toContain("QCryptographicHash::Md5");
     expect(helper).toContain("QCryptographicHash::Sha1");
+    expect(helper).toContain("SHA1_Update");
+    expect(helper).toContain("appendIntermediateSha1");
+    expect(helper).toContain("kSha1CheckpointBytes");
     expect(helper).toContain("kFirstChunkLimit");
     expect(helper).toContain("for (const auto &part : file.fileparts)");
     expect(helper).toContain("input.read(256 * 1024)");

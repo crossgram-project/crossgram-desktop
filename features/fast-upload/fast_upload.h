@@ -14,6 +14,7 @@ struct Hashes {
 	qint64 size = 0;
 	QByteArray md5;
 	QByteArray sha1;
+	QByteArray sha1Checkpoints;
 	QByteArray file10mMd5;
 };
 

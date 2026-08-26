@@ -25,16 +25,16 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
   await context.edit(`${sourceRoot}/mtproto/scheme/api.tl`, (file) => {
     file.insertAfter(
       "crossgram.getFileUrl#7520f6ea location:InputFileLocation = DataJSON;",
-      "\ncrossgram.prepareMediaUpload#f75adc0e peer:InputPeer file_id:long name:string size:long kind:string mime_type:string md5:bytes sha1:bytes file10m_md5:bytes width:int height:int duration:double = Bool;",
-      "crossgram.prepareMediaUpload#f75adc0e",
+      "\ncrossgram.prepareMediaUploadV2#f75adc0f peer:InputPeer file_id:long name:string size:long kind:string mime_type:string md5:bytes sha1:bytes sha1_checkpoints:bytes file10m_md5:bytes width:int height:int duration:double = Bool;",
+      "crossgram.prepareMediaUploadV2#f75adc0f",
     );
   });
 
   await context.edit(`${sourceRoot}/codegen/scheme/codegen_scheme.py`, (file) => {
     file.insertAfter(
       "    'messageReplies#81834865',",
-      "\n    'crossgram.prepareMediaUpload#f75adc0e',",
-      "crossgram.prepareMediaUpload#f75adc0e",
+      "\n    'crossgram.prepareMediaUploadV2#f75adc0f',",
+      "crossgram.prepareMediaUploadV2#f75adc0f",
     );
   });
 
@@ -120,7 +120,7 @@ bool Uploader::tryFastUpload(
 				weak->fallbackFastUpload(itemId, file);
 				return;
 			}
-			weak->_api->request(MTPcrossgram_PrepareMediaUpload(
+			weak->_api->request(MTPcrossgram_PrepareMediaUploadV2(
 				item->history()->peer->input(),
 				MTP_long(file->id),
 				MTP_string(file->filename),
@@ -129,6 +129,7 @@ bool Uploader::tryFastUpload(
 				MTP_string(file->filemime),
 				MTP_bytes(hashes->md5),
 				MTP_bytes(hashes->sha1),
+				MTP_bytes(hashes->sha1Checkpoints),
 				MTP_bytes(hashes->file10mMd5),
 				MTP_int(0),
 				MTP_int(0),
