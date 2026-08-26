@@ -25,16 +25,16 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
   await context.edit(`${sourceRoot}/mtproto/scheme/api.tl`, (file) => {
     file.insertAfter(
       "crossgram.getFileUrl#7520f6ea location:InputFileLocation = DataJSON;",
-      "\ncrossgram.prepareMediaUploadV2#f75adc0f peer:InputPeer file_id:long name:string size:long kind:string mime_type:string md5:bytes sha1:bytes sha1_checkpoints:bytes file10m_md5:bytes width:int height:int duration:double = Bool;",
-      "crossgram.prepareMediaUploadV2#f75adc0f",
+      "\ncrossgram.prepareMediaUploadV3#f75adc10 peer:InputPeer file_id:long name:string size:long kind:string mime_type:string md5:bytes sha1:bytes sha1_checkpoints:bytes file10m_md5:bytes width:int height:int duration:double thumbnail:bytes thumbnail_width:int thumbnail_height:int = Bool;",
+      "crossgram.prepareMediaUploadV3#f75adc10",
     );
   });
 
   await context.edit(`${sourceRoot}/codegen/scheme/codegen_scheme.py`, (file) => {
     file.insertAfter(
       "    'messageReplies#81834865',",
-      "\n    'crossgram.prepareMediaUploadV2#f75adc0f',",
-      "crossgram.prepareMediaUploadV2#f75adc0f",
+      "\n    'crossgram.prepareMediaUploadV3#f75adc10',",
+      "crossgram.prepareMediaUploadV3#f75adc10",
     );
   });
 
@@ -120,20 +120,31 @@ bool Uploader::tryFastUpload(
 				weak->fallbackFastUpload(itemId, file);
 				return;
 			}
-			weak->_api->request(MTPcrossgram_PrepareMediaUploadV2(
+			const auto kind = Crossgram::FastUpload::Kind(*file);
+			const auto document = item->media() ? item->media()->document() : nullptr;
+			const auto dimensions = document ? document->dimensions : QSize();
+			const auto duration = document ? (document->duration() / 1000.) : 0.;
+			const auto thumbnail = (kind == QStringLiteral("video") && !file->thumb.isNull())
+				? file->thumbbytes
+				: QByteArray();
+			const auto thumbnailSize = thumbnail.isEmpty() ? QSize() : file->thumb.size();
+			weak->_api->request(MTPcrossgram_PrepareMediaUploadV3(
 				item->history()->peer->input(),
 				MTP_long(file->id),
 				MTP_string(file->filename),
 				MTP_long(hashes->size),
-				MTP_string(Crossgram::FastUpload::Kind(*file)),
+				MTP_string(kind),
 				MTP_string(file->filemime),
 				MTP_bytes(hashes->md5),
 				MTP_bytes(hashes->sha1),
 				MTP_bytes(hashes->sha1Checkpoints),
 				MTP_bytes(hashes->file10mMd5),
-				MTP_int(0),
-				MTP_int(0),
-				MTP_double(0)
+				MTP_int(dimensions.width()),
+				MTP_int(dimensions.height()),
+				MTP_double(duration),
+				MTP_bytes(thumbnail),
+				MTP_int(thumbnailSize.width()),
+				MTP_int(thumbnailSize.height())
 			)).done([weak, itemId, file](const MTPBool &result) {
 				if (!weak) return;
 				if (result.type() == mtpc_boolTrue) {

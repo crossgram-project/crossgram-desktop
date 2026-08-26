@@ -91,8 +91,8 @@ ${queuedUpload}
 describe("Desktop hash-first upload patch e2e", () => {
   it("installs the custom method and build sources exactly once", async () => {
     const { schema, codegen, cmake } = await patchedFixture();
-    expect(schema.match(/crossgram\.prepareMediaUploadV2#f75adc0f/g)).toHaveLength(1);
-    expect(codegen.match(/crossgram\.prepareMediaUploadV2#f75adc0f/g)).toHaveLength(1);
+    expect(schema.match(/crossgram\.prepareMediaUploadV3#f75adc10/g)).toHaveLength(1);
+    expect(codegen.match(/crossgram\.prepareMediaUploadV3#f75adc10/g)).toHaveLength(1);
     expect(cmake.match(/crossgram\/fast_upload\.cpp/g)).toHaveLength(1);
     expect(cmake.match(/crossgram\/fast_upload\.h/g)).toHaveLength(1);
   });
@@ -100,16 +100,30 @@ describe("Desktop hash-first upload patch e2e", () => {
   it("queries the hash cache before part upload and falls back on misses or RPC errors", async () => {
     const { header, implementation } = await patchedFixture();
     expect(header).toContain("tryFastUpload(FullMsgId itemId");
-    expect(implementation).toContain("MTPcrossgram_PrepareMediaUploadV2(");
+    expect(implementation).toContain("MTPcrossgram_PrepareMediaUploadV3(");
     expect(implementation).toContain("crl::async([weak = base::make_weak(this), itemId, file]");
     expect(implementation).toContain("crl::on_main(weak, [weak, itemId, file, hashes]");
     expect(implementation).toContain("weak->session().data().message(itemId)");
-    expect(implementation).toContain("weak->_api->request(MTPcrossgram_PrepareMediaUploadV2(");
+    expect(implementation).toContain("weak->_api->request(MTPcrossgram_PrepareMediaUploadV3(");
     expect(implementation).toContain("if (!weak) return;");
     expect(implementation).toContain("weak->finishFastUpload(itemId, file);");
     expect(implementation).toContain("result.type() == mtpc_boolTrue");
     expect(implementation.match(/weak->fallbackFastUpload\(itemId, file\);/g)).toHaveLength(3);
     expect(implementation).toContain("enqueueUpload(itemId, file);");
+  });
+
+  it("passes dimensions, duration, and thumbnail data to the V3 preflight", async () => {
+    const { schema, implementation } = await patchedFixture();
+    expect(schema).toContain("thumbnail:bytes thumbnail_width:int thumbnail_height:int");
+    expect(implementation).toContain("const auto dimensions = document ? document->dimensions : QSize();");
+    expect(implementation).toContain("document->duration() / 1000.");
+    expect(implementation).toContain("file->thumbbytes");
+    expect(implementation).toContain("MTP_int(dimensions.width())");
+    expect(implementation).toContain("MTP_int(dimensions.height())");
+    expect(implementation).toContain("MTP_double(duration)");
+    expect(implementation).toContain("MTP_bytes(thumbnail)");
+    expect(implementation).toContain("MTP_int(thumbnailSize.width())");
+    expect(implementation).toContain("MTP_int(thumbnailSize.height())");
   });
 
   it("supports upstreams that call maybeSend directly after queueing", async () => {
