@@ -127,6 +127,12 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
+      - name: Restore Yarn cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('patcher/yarn.lock') }}
+
       - name: Install patcher
         working-directory: patcher
         run: yarn install --immutable

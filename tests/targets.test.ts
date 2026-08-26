@@ -3,6 +3,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  RELEASE_BRAND_BATCHES,
+  RELEASE_PLATFORMS,
+} from "../src/release-plan.js";
+import {
   CROSSGRAM_TELEGRAM_API_HASH,
   CROSSGRAM_TELEGRAM_API_ID,
   targetById,
@@ -64,22 +68,25 @@ describe("targets", () => {
         .map((match) => `${match[1]}/${match[2]}`),
     ).toEqual(expected);
 
-    const releaseTargets = [...release.matchAll(
-      /^\s+- target: (\S+)\r?\n\s+repository: \S+$/gm,
-    )].map((match) => match[1]);
-    expect(releaseTargets).toEqual(targets.map(({ id }) => id));
-    const brandBatches = [...release.matchAll(
-      /^\s+- name: (primary|secondary|tertiary)\r?\n\s+brands: '(\[[^']+\])'$/gm,
-    )].map((match) => ({
-      name: match[1],
-      brands: JSON.parse(match[2] ?? "[]") as string[],
-    }));
-    expect(brandBatches).toEqual([
+    expect(RELEASE_PLATFORMS).toEqual(["windows", "linux", "macos"]);
+    expect(RELEASE_BRAND_BATCHES).toEqual([
       { name: "primary", brands: ["cross", "qq"] },
       { name: "secondary", brands: ["wechat", "wecom"] },
       { name: "tertiary", brands: ["dingtalk", "discord"] },
     ]);
-    expect(brandBatches.every(({ brands }) => brands.length <= 2)).toBe(true);
+    expect(RELEASE_BRAND_BATCHES.every(({ brands }) => brands.length <= 2)).toBe(true);
+    expect(release).toContain("name: Plan missing desktop builds");
+    expect(release).toContain("run: yarn tsx scripts/ci/plan-release.ts");
+    expect(release).toContain("build: ${{ fromJSON(needs.plan.outputs.matrix) }}");
+    expect(release).toContain("needs.plan.outputs.needed == 'true'");
+    expect(release).toContain("BRANDS: ${{ toJSON(matrix.build.brands) }}");
+    expect(check).toContain("path: ~/.yarn/berry/cache");
+    expect(check).toContain("hashFiles('patcher/yarn.lock')");
+    expect(release).toContain("native-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.build.target }}");
+    expect(release).toContain("~/.cache/pypoetry");
+    expect(release).toContain("crazy-max/ghaction-github-runtime@v4");
+    expect(release).toContain('--cache-from "type=gha,scope=crossgram-linux-deps-$TARGET');
+    expect(release).toContain('--cache-to "type=gha,scope=crossgram-linux-deps-$TARGET');
     expect(release).toContain("name: Publish one unified release");
     expect(release).toContain("github.event_name == 'schedule'");
     expect(release).toContain("inputs.platforms == 'all'");
@@ -145,7 +152,7 @@ describe("targets", () => {
     expect(release).toContain("docker buildx create --name crossgram-buildkit");
     expect(release).toContain('dependency_report="$(ldd "$binary")"');
     expect(release).toContain("has missing shared runtime dependencies");
-    expect(release).not.toContain("xvfb-run");
+    expect(release).toContain("command -v xvfb-run >/dev/null");
     expect(release).not.toContain("sudo apt-get update");
     expect(release).not.toContain("sudo apt-get install -y xvfb");
     expect(check).toContain('--feature e2e');
@@ -160,16 +167,16 @@ describe("targets", () => {
       "utf8",
     );
     expect(release).toContain("matrix.build.target == 'materialgram' && 'macos-15'");
-    expect(release).toContain("matrix.platform == 'windows' && 'windows-latest'");
+    expect(release).toContain("matrix.build.platform == 'windows' && 'windows-latest'");
     expect(release).not.toContain("vsversion:");
     expect(release).toContain("Select the Visual Studio installation provided by the runner");
     expect(release).toContain('toolset: "14.44"');
-    expect(release).toContain("matrix.build.target }} / ${{ matrix.batch.name }} / ${{ matrix.platform");
-    expect(release).toContain("crossgram-${{ matrix.build.target }}-${{ matrix.batch.name }}--${{ matrix.platform");
+    expect(release).toContain("matrix.build.target }} / ${{ matrix.build.batch }} / ${{ matrix.build.platform");
+    expect(release).toContain("crossgram-${{ matrix.build.target }}-${{ matrix.build.batch }}--${{ matrix.build.platform");
     expect(release).toContain("CROSSGRAM_TARGET: ${{ matrix.build.target }}");
     expect(release).not.toContain("$env:TARGET");
     expect(release).toContain("TARGET_FILTER: ${{ inputs.target }}");
-    expect(release).toContain("AVAILABLE_BRANDS: ${{ matrix.batch.brands }}");
+    expect(release).toContain("BRAND_FILTER: ${{ inputs.brands }}");
     expect(release).not.toContain("${{ matrix.build.brand }}");
     expect(release).toContain("-Wno-error=install-absolute-destination");
     expect(release).toContain("CMAKE_INSTALL_FULL_DATADIR");

@@ -41,104 +41,108 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  plan:
+    name: Plan missing desktop builds
+    runs-on: ubuntu-latest
+    outputs:
+      needed: ${{ steps.release-plan.outputs.needed }}
+      matrix: ${{ steps.release-plan.outputs.matrix }}
+    steps:
+      - name: Check out patcher
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Restore Yarn cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+
+      - name: Install patcher
+        run: yarn install --immutable
+
+      - name: Resolve upstreams and build matrix
+        id: release-plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PLATFORM_FILTER: ${{ inputs.platforms }}
+          TARGET_FILTER: ${{ inputs.target }}
+          BRAND_FILTER: ${{ inputs.brands }}
+        run: yarn tsx scripts/ci/plan-release.ts
+
   build:
-    name: ${{ matrix.build.target }} / ${{ matrix.batch.name }} / ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform == 'windows' && 'windows-latest' || matrix.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
+    name: ${{ matrix.build.target }} / ${{ matrix.build.batch }} / ${{ matrix.build.platform }}
+    needs: plan
+    if: needs.plan.outputs.needed == 'true'
+    runs-on: ${{ matrix.build.platform == 'windows' && 'windows-latest' || matrix.build.platform == 'macos' && matrix.build.target == 'materialgram' && 'macos-15' || matrix.build.platform == 'macos' && 'macos-latest' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(inputs.platforms == 'windows-linux' && '["windows","linux"]' || inputs.platforms == 'windows' && '["windows"]' || inputs.platforms == 'linux' && '["linux"]' || inputs.platforms == 'macos' && '["macos"]' || '["windows","linux","macos"]') }}
-        batch:
-          - name: primary
-            brands: '["cross","qq"]'
-          - name: secondary
-            brands: '["wechat","wecom"]'
-          - name: tertiary
-            brands: '["dingtalk","discord"]'
-        build:
-          - target: tdesktop
-            repository: telegramdesktop/tdesktop
-          - target: tdesktop-x64
-            repository: TDesktop-x64/tdesktop
-          - target: ayugram
-            repository: AyuGram/AyuGramDesktop
-          - target: materialgram
-            repository: kukuruzka165/materialgram
+        build: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Check out patcher
         uses: actions/checkout@v7
         with:
           path: patcher
 
-      - name: Resolve latest release
-        id: release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          UPSTREAM: ${{ matrix.build.repository }}
-        run: |
-          tag="$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)"
-          safe="$(printf '%s' "$tag" | tr '/ :' '---')"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "safe=$safe" >> "$GITHUB_OUTPUT"
-
-      - name: Resolve variants to build
-        id: plan
-        shell: bash
-        env:
-          TARGET_FILTER: ${{ inputs.target }}
-          MATRIX_TARGET: ${{ matrix.build.target }}
-          AVAILABLE_BRANDS: ${{ matrix.batch.brands }}
-          BRAND_FILTER: ${{ inputs.brands }}
-        run: |
-          if [ -n "$TARGET_FILTER" ] && [ "$TARGET_FILTER" != all ] && [ "$TARGET_FILTER" != "$MATRIX_TARGET" ]; then
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-            echo 'brands=[]' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          brands="$AVAILABLE_BRANDS"
-          if [ -n "$BRAND_FILTER" ] && [ "$BRAND_FILTER" != all ]; then
-            requested="$(jq -cn --arg csv "$BRAND_FILTER" '$csv | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')"
-            brands="$(jq -cn \
-              --argjson available "$AVAILABLE_BRANDS" \
-              --argjson requested "$requested" \
-              '$available | map(select(. as $brand | $requested | index($brand)))')"
-          fi
-          if [ "$(jq 'length' <<<"$brands")" -eq 0 ]; then
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-            echo 'brands=[]' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "needed=true" >> "$GITHUB_OUTPUT"
-          echo "brands=$brands" >> "$GITHUB_OUTPUT"
-
       - name: Check out upstream
-        if: steps.plan.outputs.needed == 'true'
         uses: actions/checkout@v7
         with:
           repository: ${{ matrix.build.repository }}
-          ref: ${{ steps.release.outputs.tag }}
+          ref: ${{ matrix.build.tag }}
           fetch-depth: 1
           submodules: recursive
           path: work/TBuild/source
 
+      - name: Restore native dependency cache
+        if: runner.os == 'Windows' || runner.os == 'macOS'
+        uses: actions/cache@v6
+        with:
+          path: |
+            work/TBuild/Libraries
+            work/TBuild/ThirdParty
+          key: native-deps-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.build.target }}-${{ hashFiles('work/TBuild/source/Telegram/build/prepare/**') }}
+
       - name: Set up Node.js
-        if: steps.plan.outputs.needed == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 24
 
       - name: Enable Corepack
-        if: steps.plan.outputs.needed == 'true'
         run: corepack enable
 
+      - name: Restore Yarn cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('patcher/yarn.lock') }}
+
+      - name: Restore Linux Python caches
+        if: runner.os == 'Linux'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/pypoetry
+          key: linux-python-${{ matrix.build.target }}-${{ hashFiles('work/TBuild/source/Telegram/build/docker/centos_env/poetry.lock', 'work/TBuild/source/Telegram/build/docker/centos_env/pyproject.toml') }}
+
+      - name: Expose GitHub cache runtime to Buildx
+        if: runner.os == 'Linux'
+        uses: crazy-max/ghaction-github-runtime@v4
+
       - name: Install patcher
-        if: steps.plan.outputs.needed == 'true'
         working-directory: patcher
         run: yarn install --immutable
 
       - name: Initialize MSVC
-        if: runner.os == 'Windows' && steps.plan.outputs.needed == 'true'
+        if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -149,15 +153,15 @@ jobs:
           # while the pinned 14.44 toolset still keeps the compiler stable.
 
       - name: Build, smoke test, and package Windows brands
-        if: runner.os == 'Windows' && steps.plan.outputs.needed == 'true'
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           CROSSGRAM_TARGET: ${{ matrix.build.target }}
-          BRANDS: ${{ steps.plan.outputs.brands }}
-          VERSION: ${{ steps.release.outputs.safe }}
-          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+          BRANDS: ${{ toJSON(matrix.build.brands) }}
+          VERSION: ${{ matrix.build.safeTag }}
+          UPSTREAM_TAG: ${{ matrix.build.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
-          BRAND_BATCH: ${{ matrix.batch.name }}
+          BRAND_BATCH: ${{ matrix.build.batch }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -308,14 +312,14 @@ jobs:
           [IO.File]::WriteAllText($metadataFile, "$releaseMetadata`n", [Text.UTF8Encoding]::new($false))
 
       - name: Build, smoke test, and package Linux brands
-        if: runner.os == 'Linux' && steps.plan.outputs.needed == 'true'
+        if: runner.os == 'Linux'
         env:
           TARGET: ${{ matrix.build.target }}
-          BRANDS: ${{ steps.plan.outputs.brands }}
-          VERSION: ${{ steps.release.outputs.safe }}
-          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+          BRANDS: ${{ toJSON(matrix.build.brands) }}
+          VERSION: ${{ matrix.build.safeTag }}
+          UPSTREAM_TAG: ${{ matrix.build.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
-          BRAND_BATCH: ${{ matrix.batch.name }}
+          BRAND_BATCH: ${{ matrix.build.batch }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -490,7 +494,18 @@ jobs:
             max-parallelism = 2
           EOF
           docker buildx create --name crossgram-buildkit --driver docker-container --buildkitd-config "$RUNNER_TEMP/buildkitd.toml" --use
-          docker buildx build --builder crossgram-buildkit --load -t crossgram-tdesktop-build .
+          docker buildx build \
+            --builder crossgram-buildkit \
+            --cache-from "type=gha,scope=crossgram-linux-deps-$TARGET,timeout=10m" \
+            --cache-to "type=gha,scope=crossgram-linux-deps-$TARGET,mode=min,ignore-error=true,timeout=30m" \
+            --load \
+            -t crossgram-tdesktop-build \
+            .
+          # xvfb is part of the GitHub-hosted Ubuntu image. Avoid an apt update
+          # here: a stalled mirror would otherwise consume the remaining
+          # six-hour job budget after the dependency image has finished.
+          command -v xvfb-run >/dev/null
+          command -v Xvfb >/dev/null
 
           effective_id="$(jq -r .apiId <<<"$first_metadata")"
           effective_hash="$(jq -r .apiHash <<<"$first_metadata")"
@@ -580,14 +595,14 @@ jobs:
             > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$BRAND_BATCH-linux-$VERSION.upstream.json"
 
       - name: Build, smoke test, and package macOS brands
-        if: runner.os == 'macOS' && steps.plan.outputs.needed == 'true'
+        if: runner.os == 'macOS'
         env:
           TARGET: ${{ matrix.build.target }}
-          BRANDS: ${{ steps.plan.outputs.brands }}
-          VERSION: ${{ steps.release.outputs.safe }}
-          UPSTREAM_TAG: ${{ steps.release.outputs.tag }}
+          BRANDS: ${{ toJSON(matrix.build.brands) }}
+          VERSION: ${{ matrix.build.safeTag }}
+          UPSTREAM_TAG: ${{ matrix.build.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
-          BRAND_BATCH: ${{ matrix.batch.name }}
+          BRAND_BATCH: ${{ matrix.build.batch }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -757,10 +772,10 @@ jobs:
             > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$BRAND_BATCH-macos-$VERSION.upstream.json"
 
       - name: Upload artifact
-        if: always() && steps.plan.outputs.needed == 'true'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: crossgram-${{ matrix.build.target }}-${{ matrix.batch.name }}--${{ matrix.platform }}--${{ steps.release.outputs.safe }}
+          name: crossgram-${{ matrix.build.target }}-${{ matrix.build.batch }}--${{ matrix.build.platform }}--${{ matrix.build.safeTag }}
           path: artifacts/crossgram-*
           if-no-files-found: warn
           retention-days: 14
@@ -769,11 +784,12 @@ jobs:
     name: Publish one unified release
     if: >-
       always() &&
+      needs.plan.outputs.needed == 'true' &&
       (github.event_name == 'schedule' ||
        (inputs.platforms == 'all' &&
         inputs.target == 'all' &&
         inputs.brands == 'all'))
-    needs: build
+    needs: [plan, build]
     runs-on: ubuntu-latest
     steps:
       - name: Download successful platform builds

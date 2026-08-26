@@ -124,13 +124,29 @@ tdata/<account-hash>/server-switch.json
 
 [`check.yml`](.github/workflows/check.yml) resolves and patches all 24 target/brand combinations in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
 
-[`release.yml`](.github/workflows/release.yml) runs one build job per target/platform and incrementally packages all six brands, producing 24 target/brand combinations across Windows, Linux, and macOS. Each workflow run publishes every successful target, brand, and platform into one unified `Crossgram Desktop #<run-number>` release, matching the Android release model. One job's failure does not prevent the other successful builds from being published.
+[`release.yml`](.github/workflows/release.yml) resolves all upstream versions once and
+generates a dynamic matrix of two-brand build batches. Scheduled runs inspect release
+assets produced from the current patcher commit and only rebuild missing package/symbol
+pairs. This makes an unchanged daily run finish after the planner, while an interrupted
+release retries only its missing targets, platforms, batches, or individual brands.
+Manual dispatches always rebuild the explicitly requested filters.
+
+Each run publishes every successful target, brand, and platform into one unified
+`Crossgram Desktop #<run-number>` release, matching the Android release model. One
+job's failure does not prevent the other successful builds from being published.
 
 User archives contain stripped production binaries built with `NDEBUG` and `QT_NO_DEBUG`. Debug information is kept out of those archives and published as separate `*.symbols.*` assets: PDB files on Windows, split debug files on Linux, and dSYM bundles on macOS.
 
-The publish job uses the repository secret `CROSSGRAM_RELEASE_TOKEN` when present and otherwise falls back to `GITHUB_TOKEN`. Organizations that force the default Actions token to read-only must provide a fine-grained token with repository Contents read/write access through that secret.
+The publish job uses `GITHUB_TOKEN` with repository Contents write permission.
 
 CI uses the Crossgram project's Telegram API identity for every supported client target. Repository secrets `TDESKTOP_API_ID` and `TDESKTOP_API_HASH` may override both values together; a partial override is rejected. Release builds never fall back to `TDESKTOP_API_TEST=ON`.
+
+The workflows cache Yarn artifacts, Linux Python package downloads and BuildKit
+dependency-image layers, plus the Windows/macOS `TBuild/Libraries` and
+`TBuild/ThirdParty` dependency trees. Native cache keys include the target and the
+upstream prepare-script hash, while BuildKit validates its own layer inputs, so
+regular app releases can reuse prepared Qt and third-party libraries without
+accepting another target's or a stale build recipe's dependencies.
 
 Release tags use this form:
 
