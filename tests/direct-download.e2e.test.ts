@@ -207,6 +207,14 @@ describe("Desktop direct-download patch e2e", () => {
     expect(helper).toContain("fileReference.startsWith(kReactionPrefix)");
   });
 
+  it("accepts legacy and cache-isolated bridge media references", async () => {
+    const { helper } = await patchedFixture();
+    expect(helper).toContain("const auto separator = suffix.indexOf(':')");
+    expect(helper).toContain("suffix.indexOf(':', separator + 1) >= 0");
+    expect(helper).toContain("validId(suffix.left(separator))");
+    expect(helper).toContain("validId(suffix.mid(separator + 1))");
+  });
+
   it("rejects oversized filename-less cloud files before FileLoader asserts", async () => {
     const { cloudFile } = await patchedFixture();
     expect(cloudFile).toContain("file.byteSize > Storage::kMaxFileInMemory");

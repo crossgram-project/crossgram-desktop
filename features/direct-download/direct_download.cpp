@@ -12,11 +12,18 @@ bool IsCandidate(const QByteArray &fileReference) {
 	constexpr char kMediaPrefix[] = "bridge-media:";
 	if (fileReference.startsWith(kMediaPrefix)) {
 		const auto suffix = fileReference.mid(sizeof(kMediaPrefix) - 1);
-		if (suffix.isEmpty() || suffix.front() == '0') return false;
-		for (const auto value : suffix) {
-			if (value < '0' || value > '9') return false;
-		}
-		return true;
+		const auto separator = suffix.indexOf(':');
+		const auto validId = [](const QByteArray &value) {
+			if (value.isEmpty() || value.front() == '0') return false;
+			for (const auto digit : value) {
+				if (digit < '0' || digit > '9') return false;
+			}
+			return true;
+		};
+		if (separator < 0) return validId(suffix);
+		if (suffix.indexOf(':', separator + 1) >= 0) return false;
+		return validId(suffix.left(separator))
+			&& validId(suffix.mid(separator + 1));
 	}
 	constexpr char kStickerPrefix[] = "bridge-sticker:";
 	constexpr char kReactionPrefix[] = "bridge-reaction-resource:";
