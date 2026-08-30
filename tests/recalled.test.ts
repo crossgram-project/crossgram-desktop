@@ -23,7 +23,7 @@ async function fixture(): Promise<string> {
     "Telegram/SourceFiles/history/history_item_edition.h": "\tbool isEditHide = false;\n",
     "Telegram/SourceFiles/history/history_item_edition.cpp": "isEditHide = message.is_edit_hide();\n",
     "Telegram/SourceFiles/history/view/history_view_message.cpp":
-      "#include \"history/view/history_view_message.h\"\nvoid Message::draw(Painter &p, const PaintContext &context) const {\n\tconst auto g = countGeometry();\n\tif (g.width() < 1) return;\n\tconst auto item = data();\n\tconst auto media = this->media();\n}\n",
+      "#include \"history/view/history_view_message.h\"\nvoid Message::draw(Painter &p, const PaintContext &context) const {\n\tauto g = countGeometry();\n\tif (g.width() < 1) {\n\t\treturn;\n\t}\n\n\tconst auto item = data();\n\tconst auto media = this->media();\n}\n",
     "Telegram/SourceFiles/history/view/history_view_element.cpp":
       "if (!settings.semiTransparentDeletedMessages()) {\n\t\t_deletedOpacityAnimation.stop();\n}\nif (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {\n\t\t_deletedOpacityAnimation.stop();\n}\n\tif (_data->isDeleted()) {\n\t\tif (const auto group = history()->owner().groups().find(_data)) {\n\t\t}\n\t}\n",
   };

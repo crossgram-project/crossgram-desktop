@@ -79,7 +79,7 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
         "#include <gsl/gsl>",
       );
       file.insertAfter(
-        "\tconst auto media = this->media();",
+        "void Message::draw(Painter &p, const PaintContext &context) const {\n\tauto g = countGeometry();\n\tif (g.width() < 1) {\n\t\treturn;\n\t}\n\n\tconst auto item = data();\n\tconst auto media = this->media();",
         "\n\t// crossgram-recalled-generic-paint\n\tp.save();\n\tconst auto recalledPaintGuard = gsl::finally([&] {\n\t\tif (item->isRecalled() && item->isRecalledVisible()) {\n\t\t\tp.setPen(Qt::gray);\n\t\t\tp.drawText(QRect(0, 0, width(), height()), Qt::AlignRight | Qt::AlignBottom, QString::fromUtf8(\"\\xF0\\x9F\\x97\\x91\"));\n\t\t}\n\t\tp.restore();\n\t});\n\tif (item->isRecalled() && item->isRecalledVisible()) {\n\t\tp.setOpacity(p.opacity() * 0.7);\n\t}",
         "crossgram-recalled-generic-paint",
       );
