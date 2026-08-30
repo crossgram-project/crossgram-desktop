@@ -7,20 +7,13 @@ interface PatchOptions {
   readonly featureRoot: string;
 }
 
-/**
- * Add Crossgram's recalled message flags and render visible recalls using
- * AyuGram's existing deleted-message UI (opacity + deleted-mark icon).
- *
- * `recalled` is the semantic bit (flags.12). `recalled_visible` (flags2.30)
- * is deliberately separate so the server can omit recalled messages for
- * clients/configurations that should not display them.
- */
+/** Add Crossgram recalled flags and render visible recalls on every desktop target. */
 export async function patchRecalled(options: PatchOptions): Promise<void> {
-  // The source locations and Ayu-specific deleted-message UI are only present
-  // in AyuGramDesktop. Other desktop targets keep the upstream schema untouched.
-  if (options.target.id !== "ayugram") return;
   const context = new PatchContext(options.root, options.target, options.featureRoot);
 
+  // The wire schema and HistoryItem plumbing are shared by tdesktop, 64Gram,
+  // Materialgram and AyuGram. `true` flag fields carry no payload, so old
+  // clients safely ignore the new bits while retaining the same constructor.
   await context.edit("Telegram/SourceFiles/mtproto/scheme/api.tl", (file) => {
     file.replacePattern(
       /^message#7600b9d3 flags:# /m,
@@ -55,24 +48,6 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
     );
   });
 
-  await context.edit("Telegram/SourceFiles/history/view/history_view_element.cpp", (file) => {
-    file.replace(
-      "if (!settings.semiTransparentDeletedMessages()) {",
-      "if (!settings.semiTransparentDeletedMessages() && !_data->isRecalled()) { // crossgram-recalled-opacity",
-      "crossgram-recalled-opacity",
-    );
-    file.replace(
-      "if (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {\n\t\t_deletedOpacityAnimation.stop();",
-      "if (!AyuSettings::getInstance().semiTransparentDeletedMessages() && !_data->isRecalled()) {\n\t\t_deletedOpacityAnimation.stop();",
-      "if (!AyuSettings::getInstance().semiTransparentDeletedMessages() && !_data->isRecalled())",
-    );
-    file.replace(
-      "\tif (_data->isDeleted()) {\n\t\tif (const auto group = history()->owner().groups().find(_data)) {",
-      "\tif (_data->isDeleted()) {\n\t\tif (_data->isRecalled()) {\n\t\t\treturn 0.7;\n\t\t}\n\t\tif (const auto group = history()->owner().groups().find(_data)) {",
-      "return 0.7;",
-    );
-  });
-
   await context.edit("Telegram/SourceFiles/history/history_item_edition.h", (file) => {
     file.replace(
       "\tbool isEditHide = false;",
@@ -96,4 +71,41 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
       "_recalledVisible = edition.recalledVisible;",
     );
   });
+
+  if (options.target.id === "ayugram") {
+    // AyuGram already has a deleted-message component and icon; reuse it.
+    await context.edit("Telegram/SourceFiles/history/view/history_view_element.cpp", (file) => {
+      file.replace(
+        "if (!settings.semiTransparentDeletedMessages()) {",
+        "if (!settings.semiTransparentDeletedMessages() && !_data->isRecalled()) { // crossgram-recalled-opacity",
+        "crossgram-recalled-opacity",
+      );
+      file.replace(
+        "if (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {\n\t\t_deletedOpacityAnimation.stop();",
+        "if (!AyuSettings::getInstance().semiTransparentDeletedMessages() && !_data->isRecalled()) {\n\t\t_deletedOpacityAnimation.stop();",
+        "if (!AyuSettings::getInstance().semiTransparentDeletedMessages() && !_data->isRecalled()",
+      );
+      file.replace(
+        "\tif (_data->isDeleted()) {\n\t\tif (const auto group = history()->owner().groups().find(_data)) {",
+        "\tif (_data->isDeleted()) {\n\t\tif (_data->isRecalled()) {\n\t\t\treturn 0.7;\n\t\t}\n\t\tif (const auto group = history()->owner().groups().find(_data)) {",
+        "return 0.7;",
+      );
+    });
+  } else {
+    // Upstream tdesktop-family targets have no AyuDeleted component. Apply
+    // the same visual result at the message draw boundary and overlay a
+    // trash glyph in the lower-right corner.
+    await context.edit("Telegram/SourceFiles/history/view/history_view_message.cpp", (file) => {
+      file.insertAfter(
+        "#include \"history/view/history_view_message.h\"",
+        "\n#include <gsl/gsl>",
+        "#include <gsl/gsl>",
+      );
+      file.insertAfter(
+        "\tconst auto media = this->media();",
+        "\n\t// crossgram-recalled-generic-paint\n\tp.save();\n\tconst auto recalledPaintGuard = gsl::finally([&] {\n\t\tif (item->isRecalled() && item->isRecalledVisible()) {\n\t\t\tp.setPen(Qt::gray);\n\t\t\tp.drawText(QRect(0, 0, width(), height()), Qt::AlignRight | Qt::AlignBottom, QString::fromUtf8(\"\\xF0\\x9F\\x97\\x91\"));\n\t\t}\n\t\tp.restore();\n\t});\n\tif (item->isRecalled() && item->isRecalledVisible()) {\n\t\tp.setOpacity(p.opacity() * 0.7);\n\t}",
+        "crossgram-recalled-generic-paint",
+      );
+    });
+  }
 }

@@ -22,6 +22,8 @@ async function fixture(): Promise<string> {
       "\tif (const auto until = data.vreport_delivery_until_date()) {\nvoid HistoryItem::applyEdition(HistoryMessageEdition &&edition) {\n",
     "Telegram/SourceFiles/history/history_item_edition.h": "\tbool isEditHide = false;\n",
     "Telegram/SourceFiles/history/history_item_edition.cpp": "isEditHide = message.is_edit_hide();\n",
+    "Telegram/SourceFiles/history/view/history_view_message.cpp":
+      "#include \"history/view/history_view_message.h\"\nvoid Message::draw(Painter &p, const PaintContext &context) const {\n\tconst auto g = countGeometry();\n\tif (g.width() < 1) return;\n\tconst auto item = data();\n\tconst auto media = this->media();\n}\n",
     "Telegram/SourceFiles/history/view/history_view_element.cpp":
       "if (!settings.semiTransparentDeletedMessages()) {\n\t\t_deletedOpacityAnimation.stop();\n}\nif (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {\n\t\t_deletedOpacityAnimation.stop();\n}\n\tif (_data->isDeleted()) {\n\t\tif (const auto group = history()->owner().groups().find(_data)) {\n\t\t}\n\t}\n",
   };
@@ -64,10 +66,14 @@ describe("recalled desktop patch", () => {
     expect(second).toBe(first[2]);
   });
 
-  it("does not modify non-AyuGram targets", async () => {
+  it.each(["tdesktop", "tdesktop-x64", "materialgram"])("patches %s target", async (targetId) => {
     const root = await fixture();
-    await patchRecalled({ root, target: targetById("tdesktop"), featureRoot: root });
-    const source = await readFile(path.join(root, "Telegram/SourceFiles/mtproto/scheme/api.tl"), "utf8");
-    expect(source).not.toContain("recalled");
+    await patchRecalled({ root, target: targetById(targetId), featureRoot: root });
+    const [schema, message] = await Promise.all([
+      readFile(path.join(root, "Telegram/SourceFiles/mtproto/scheme/api.tl"), "utf8"),
+      readFile(path.join(root, "Telegram/SourceFiles/history/view/history_view_message.cpp"), "utf8"),
+    ]);
+    expect(schema).toContain("recalled:flags.12?true");
+    expect(message).toContain("crossgram-recalled-generic-paint");
   });
 });
