@@ -28,37 +28,22 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
   });
 
   await context.edit("Telegram/SourceFiles/history/history_item.h", (file) => {
-    if (options.target.id === "ayugram") {
-      file.replace(
-        "\t[[nodiscard]] bool isDeleted() const;",
-        "\t[[nodiscard]] bool isDeleted() const;\n\t[[nodiscard]] bool isRecalled() const { return _recalled; }\n\t[[nodiscard]] bool isRecalledVisible() const { return _recalledVisible; }",
-        "isRecalled() const { return _recalled; }",
-      );
-      file.replace(
-        "\tbool _deleted = false;\n\tbool _deletedAnimated = false;",
-        "\tbool _deleted = false;\n\tbool _deletedAnimated = false;\n\tbool _recalled = false;\n\tbool _recalledVisible = false;",
-        "bool _recalled = false;",
-      );
-    } else {
-      file.insertAfter(
-        "\t[[nodiscard]] bool isEmpty() const;",
-        "\n\t[[nodiscard]] bool isRecalled() const { return _recalled; }\n\t[[nodiscard]] bool isRecalledVisible() const { return _recalledVisible; }",
-        "isRecalled() const { return _recalled; }",
-      );
-      file.insertAfter(
-        "\tmutable MessageFlags _flags = 0;",
-        "\n\tbool _recalled = false;\n\tbool _recalledVisible = false;",
-        "bool _recalled = false;",
-      );
-    }
+    file.insertAfter(
+      "\t[[nodiscard]] bool isEmpty() const;",
+      "\n\t[[nodiscard]] bool isRecalled() const { return _recalled; }\n\t[[nodiscard]] bool isRecalledVisible() const { return _recalledVisible; }",
+      "isRecalled() const { return _recalled; }",
+    );
+    file.insertAfter(
+      "\tmutable MessageFlags _flags = 0;",
+      "\n\tbool _recalled = false;\n\tbool _recalledVisible = false;",
+      "bool _recalled = false;",
+    );
   });
 
   await context.edit("Telegram/SourceFiles/history/history_item.cpp", (file) => {
     file.insertAfter(
       "\tif (const auto until = data.vreport_delivery_until_date()) {",
-      options.target.id === "ayugram"
-        ? "\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n\tif (_recalled && _recalledVisible) {\n\t\tsetDeleted();\n\t}\n\n"
-        : "\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n\n",
+      "\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n\n",
       "_recalled = data.is_recalled();",
     );
   });
@@ -82,37 +67,12 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
   await context.edit("Telegram/SourceFiles/history/history_item.cpp", (file) => {
     file.insertAfter(
       "void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {",
-      options.target.id === "ayugram"
-        ? "\tif (edition.recalled) {\n\t\t_recalled = true;\n\t\t_recalledVisible = edition.recalledVisible;\n\t\tif (_recalledVisible) {\n\t\t\tsetDeleted();\n\t\t}\n\t}\n"
-        : "\tif (edition.recalled) {\n\t\t_recalled = true;\n\t\t_recalledVisible = edition.recalledVisible;\n\t}\n",
+      "\tif (edition.recalled) {\n\t\t_recalled = true;\n\t\t_recalledVisible = edition.recalledVisible;\n\t}\n",
       "_recalledVisible = edition.recalledVisible;",
     );
   });
 
-  if (options.target.id === "ayugram") {
-    // AyuGram already has a deleted-message component and icon; reuse it.
-    await context.edit("Telegram/SourceFiles/history/view/history_view_element.cpp", (file) => {
-      file.replace(
-        "if (!settings.semiTransparentDeletedMessages()) {",
-        "if (!settings.semiTransparentDeletedMessages() && !_data->isRecalled()) { // crossgram-recalled-opacity",
-        "crossgram-recalled-opacity",
-      );
-      file.replace(
-        "if (!AyuSettings::getInstance().semiTransparentDeletedMessages()) {\n\t\t_deletedOpacityAnimation.stop();",
-        "if (!AyuSettings::getInstance().semiTransparentDeletedMessages() && !_data->isRecalled()) {\n\t\t_deletedOpacityAnimation.stop();",
-        "if (!AyuSettings::getInstance().semiTransparentDeletedMessages() && !_data->isRecalled()",
-      );
-      file.replace(
-        "\tif (_data->isDeleted()) {\n\t\tif (const auto group = history()->owner().groups().find(_data)) {",
-        "\tif (_data->isDeleted()) {\n\t\tif (_data->isRecalled()) {\n\t\t\treturn 0.7;\n\t\t}\n\t\tif (const auto group = history()->owner().groups().find(_data)) {",
-        "return 0.7;",
-      );
-    });
-  } else {
-    // Upstream tdesktop-family targets have no AyuDeleted component. Apply
-    // the same visual result at the message draw boundary and overlay a
-    // trash glyph in the lower-right corner.
-    await context.edit("Telegram/SourceFiles/history/view/history_view_message.cpp", (file) => {
+  await context.edit("Telegram/SourceFiles/history/view/history_view_message.cpp", (file) => {
       file.insertAfter(
         "#include \"history/view/history_view_message.h\"",
         "\n#include <gsl/gsl>",
@@ -123,6 +83,5 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
         "\n\t// crossgram-recalled-generic-paint\n\tp.save();\n\tconst auto recalledPaintGuard = gsl::finally([&] {\n\t\tif (item->isRecalled() && item->isRecalledVisible()) {\n\t\t\tp.setPen(Qt::gray);\n\t\t\tp.drawText(QRect(0, 0, width(), height()), Qt::AlignRight | Qt::AlignBottom, QString::fromUtf8(\"\\xF0\\x9F\\x97\\x91\"));\n\t\t}\n\t\tp.restore();\n\t});\n\tif (item->isRecalled() && item->isRecalledVisible()) {\n\t\tp.setOpacity(p.opacity() * 0.7);\n\t}",
         "crossgram-recalled-generic-paint",
       );
-    });
-  }
+  });
 }

@@ -46,7 +46,7 @@ describe("recalled desktop patch", () => {
       readFile(path.join(root, "Telegram/SourceFiles/history/history_item.cpp"), "utf8"),
       readFile(path.join(root, "Telegram/SourceFiles/history/history_item_edition.h"), "utf8"),
       readFile(path.join(root, "Telegram/SourceFiles/history/history_item_edition.cpp"), "utf8"),
-      readFile(path.join(root, "Telegram/SourceFiles/history/view/history_view_element.cpp"), "utf8"),
+      readFile(path.join(root, "Telegram/SourceFiles/history/view/history_view_message.cpp"), "utf8"),
     ]);
     expect(first[0]).toContain("recalled:flags.12?true");
     expect(first[0]).toContain("recalled_visible:flags2.30?true");
@@ -59,8 +59,8 @@ describe("recalled desktop patch", () => {
     expect(first[3]).toContain("bool recalledVisible = false");
     expect(first[4]).toContain("recalled = message.is_recalled();");
     expect(first[4]).toContain("recalledVisible = message.is_recalled_visible();");
-    expect(first[5]).toContain("&& !_data->isRecalled()");
-    expect(first[5]).toContain("return 0.7;");
+    expect(first[5]).toContain("crossgram-recalled-generic-paint");
+    expect(first[5]).toContain("p.setOpacity(p.opacity() * 0.7)");
     await patchRecalled(options);
     const second = await readFile(path.join(root, "Telegram/SourceFiles/history/history_item.cpp"), "utf8");
     expect(second).toBe(first[2]);
