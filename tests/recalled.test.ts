@@ -17,7 +17,7 @@ async function fixture(): Promise<string> {
     "Telegram/SourceFiles/mtproto/scheme/api.tl":
       "message#7600b9d3 flags:# out:flags.1?true effect:flags2.2?long factcheck:flags2.3?FactCheck = Message;\n",
     "Telegram/SourceFiles/history/history_item.h":
-      "\t[[nodiscard]] bool isDeleted() const;\n\tbool _deleted = false;\n\tbool _deletedAnimated = false;\n",
+      "\t[[nodiscard]] bool isDeleted() const;\n\t[[nodiscard]] bool isEmpty() const;\n\tmutable MessageFlags _flags = 0;\n\tbool _deleted = false;\n\tbool _deletedAnimated = false;\n",
     "Telegram/SourceFiles/history/history_item.cpp":
       "\tif (const auto until = data.vreport_delivery_until_date()) {\nvoid HistoryItem::applyEdition(HistoryMessageEdition &&edition) {\n",
     "Telegram/SourceFiles/history/history_item_edition.h": "\tbool isEditHide = false;\n",

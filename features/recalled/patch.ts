@@ -28,22 +28,37 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
   });
 
   await context.edit("Telegram/SourceFiles/history/history_item.h", (file) => {
-    file.replace(
-      "\t[[nodiscard]] bool isDeleted() const;",
-      "\t[[nodiscard]] bool isDeleted() const;\n\t[[nodiscard]] bool isRecalled() const { return _recalled; }\n\t[[nodiscard]] bool isRecalledVisible() const { return _recalledVisible; }",
-      "isRecalled() const { return _recalled; }",
-    );
-    file.replace(
-      "\tbool _deleted = false;\n\tbool _deletedAnimated = false;",
-      "\tbool _deleted = false;\n\tbool _deletedAnimated = false;\n\tbool _recalled = false;\n\tbool _recalledVisible = false;",
-      "bool _recalled = false;",
-    );
+    if (options.target.id === "ayugram") {
+      file.replace(
+        "\t[[nodiscard]] bool isDeleted() const;",
+        "\t[[nodiscard]] bool isDeleted() const;\n\t[[nodiscard]] bool isRecalled() const { return _recalled; }\n\t[[nodiscard]] bool isRecalledVisible() const { return _recalledVisible; }",
+        "isRecalled() const { return _recalled; }",
+      );
+      file.replace(
+        "\tbool _deleted = false;\n\tbool _deletedAnimated = false;",
+        "\tbool _deleted = false;\n\tbool _deletedAnimated = false;\n\tbool _recalled = false;\n\tbool _recalledVisible = false;",
+        "bool _recalled = false;",
+      );
+    } else {
+      file.insertAfter(
+        "\t[[nodiscard]] bool isEmpty() const;",
+        "\n\t[[nodiscard]] bool isRecalled() const { return _recalled; }\n\t[[nodiscard]] bool isRecalledVisible() const { return _recalledVisible; }",
+        "isRecalled() const { return _recalled; }",
+      );
+      file.insertAfter(
+        "\tmutable MessageFlags _flags = 0;",
+        "\n\tbool _recalled = false;\n\tbool _recalledVisible = false;",
+        "bool _recalled = false;",
+      );
+    }
   });
 
   await context.edit("Telegram/SourceFiles/history/history_item.cpp", (file) => {
     file.insertAfter(
       "\tif (const auto until = data.vreport_delivery_until_date()) {",
-      "\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n\tif (_recalled && _recalledVisible) {\n\t\tsetDeleted();\n\t}\n\n",
+      options.target.id === "ayugram"
+        ? "\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n\tif (_recalled && _recalledVisible) {\n\t\tsetDeleted();\n\t}\n\n"
+        : "\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n\n",
       "_recalled = data.is_recalled();",
     );
   });
@@ -67,7 +82,9 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
   await context.edit("Telegram/SourceFiles/history/history_item.cpp", (file) => {
     file.insertAfter(
       "void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {",
-      "\tif (edition.recalled) {\n\t\t_recalled = true;\n\t\t_recalledVisible = edition.recalledVisible;\n\t\tif (_recalledVisible) {\n\t\t\tsetDeleted();\n\t\t}\n\t}\n",
+      options.target.id === "ayugram"
+        ? "\tif (edition.recalled) {\n\t\t_recalled = true;\n\t\t_recalledVisible = edition.recalledVisible;\n\t\tif (_recalledVisible) {\n\t\t\tsetDeleted();\n\t\t}\n\t}\n"
+        : "\tif (edition.recalled) {\n\t\t_recalled = true;\n\t\t_recalledVisible = edition.recalledVisible;\n\t}\n",
       "_recalledVisible = edition.recalledVisible;",
     );
   });
