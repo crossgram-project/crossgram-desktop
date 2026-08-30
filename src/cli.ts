@@ -12,6 +12,7 @@ import { patchCrossInstanceForward } from "../features/cross-instance-forward/pa
 import { patchRawAnimation } from "../features/raw-animation/patch.js";
 import { patchMergedForward } from "../features/merged-forward/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
+import { patchRecalled } from "../features/recalled/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
 import { resolveFeatures } from "./features.js";
 import { targetById } from "./targets.js";
@@ -66,6 +67,11 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
     await patchUpstreamCompatibility({
       root: values.root!,
       target,
+    });
+    await patchRecalled({
+      root: values.root!,
+      target,
+      featureRoot: resolve(repositoryRoot, "features/recalled"),
     });
     await patchServerSwitch({
       root: values.root!,
