@@ -30,27 +30,31 @@ const { positionals, values } = parseArgs({
 
 const command = positionals[0];
 if (!values.target || (command === "patch" && !values.root) || !["patch", "metadata"].includes(command ?? "")) {
-  console.error("Usage: yarn apply --target <id> --brand <id> --root <tdesktop checkout> [--feature e2e]");
+  console.error("Usage: yarn apply --target <id> --brand <id|runtime> --root <tdesktop checkout> [--feature e2e]");
   console.error("       yarn metadata --target <id> --brand <id>");
   process.exitCode = 2;
 } else {
   const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const target = targetById(values.target);
-  const brand = resolveBrand(target, brandById(values.brand ?? "cross"));
+  const requestedBrand = values.brand ?? "cross";
+  // `runtime` builds keep one binary and expose all themed brands in-app.
+  const brand = requestedBrand === "runtime"
+    ? null
+    : resolveBrand(target, brandById(requestedBrand));
   const features = resolveFeatures(values.feature ?? []);
   if (command === "metadata") {
     const metadata = {
       target: target.id,
       repository: target.repository,
       upstreamExecutable: target.executable,
-      executable: brand.executable,
-      displayName: brand.title,
-      packageSuffix: brand.packageSuffix,
-      linuxId: brand.linuxId,
-      windowsAppId: brand.windowsAppId,
+      executable: brand?.executable ?? target.crossName,
+      displayName: brand?.title ?? target.crossName,
+      packageSuffix: brand?.packageSuffix ?? "crossgram",
+      linuxId: brand?.linuxId ?? `${target.desktopFile.slice(0, -".desktop".length)}.crossgram`,
+      windowsAppId: brand?.windowsAppId ?? "runtime",
       apiId: target.apiId,
       apiHash: target.apiHash,
-      brand: brand.id,
+      brand: brand?.id ?? "runtime",
     };
     if (values["github-output"]) {
       const output = process.env.GITHUB_OUTPUT;
@@ -117,6 +121,6 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       });
     }
     const enabled = features.size ? ` with ${[...features].join(", ")}` : "";
-    console.log(`Patched ${values.target}/${brand.id}${enabled} at ${resolve(values.root!)}.`);
+    console.log(`Patched ${values.target}/${brand?.id ?? "runtime"}${enabled} at ${resolve(values.root!)}.`);
   }
 }

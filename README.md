@@ -60,12 +60,17 @@ yarn install --immutable
 yarn apply --target tdesktop --brand cross --root /path/to/tdesktop
 ```
 
+To produce one universal package instead of one package per themed brand, use
+`--brand runtime`. The resulting binary exposes **Crossgram brand** in the
+main menu; selecting a brand persists it under `tdata/crossgram-brand` and
+restarts the client so the new display name is applied.
+
 Normal builds do not contain the semantic automation endpoint. Add
 `--feature e2e` only for a controlled E2E build; see
 [`features/e2e/README.md`](features/e2e/README.md) for the runtime protocol and
 driver examples.
 
-Target ids are `tdesktop`, `tdesktop-x64`, `ayugram`, and `materialgram`. Brand ids are `cross`, `qq`, `wechat`, `wecom`, `dingtalk`, and `discord`; `cross` is the default. Applying the patch repeatedly is supported and produces byte-identical output.
+Target ids are `tdesktop`, `tdesktop-x64`, `ayugram`, and `materialgram`. Brand ids are `cross`, `qq`, `wechat`, `wecom`, `dingtalk`, and `discord`; `cross` is the default. `runtime` is a universal build mode that allows switching among all six brands in-app. Applying the patch repeatedly is supported and produces byte-identical output.
 
 The patcher performs unique, structural edits around C++ function bodies, declarations, includes, CMake metadata, and desktop integration files. A missing or ambiguous anchor is a hard failure. Large injected implementations and their integration logic are isolated under [`features/server-switch`](features/server-switch), [`features/branding`](features/branding), and [`features/e2e`](features/e2e).
 
@@ -125,11 +130,10 @@ tdata/<account-hash>/server-switch.json
 [`check.yml`](.github/workflows/check.yml) resolves and patches all 24 target/brand combinations in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
 
 [`release.yml`](.github/workflows/release.yml) resolves all upstream versions once and
-generates a dynamic matrix of two-brand build batches. Scheduled runs inspect release
-assets produced from the current patcher commit and only rebuild missing package/symbol
-pairs. This makes an unchanged daily run finish after the planner, while an interrupted
-release retries only its missing targets, platforms, batches, or individual brands.
-Manual dispatches always rebuild the explicitly requested filters.
+generates a dynamic matrix. Scheduled runs use the single `runtime` universal brand by
+default, while manual dispatches can request legacy per-brand batches with the
+`brands` input. Both modes inspect release assets produced from the current patcher
+commit and only rebuild missing package/symbol pairs.
 
 Each run publishes every successful target, brand, and platform into one unified
 `Crossgram Desktop #<run-number>` release, matching the Android release model. One

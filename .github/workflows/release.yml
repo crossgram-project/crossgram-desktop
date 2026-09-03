@@ -28,7 +28,7 @@ on:
           - ayugram
           - materialgram
       brands:
-        description: Comma-separated brands to build, or all
+        description: Comma-separated brands to build, runtime for one universal package, or all
         required: false
         default: all
         type: string

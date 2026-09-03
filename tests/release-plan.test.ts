@@ -137,4 +137,17 @@ describe("release planning", () => {
       releases,
     })).toThrow(/Unknown platform filter/);
   });
+
+  it("plans one universal runtime package per platform", () => {
+    expect(createReleasePlan({
+      eventName: "workflow_dispatch",
+      platformFilter: "windows-linux",
+      targetFilter: "tdesktop",
+      brandFilter: "runtime",
+      releases,
+    })).toEqual([
+      expect.objectContaining({ platform: "windows", batch: "runtime", brands: ["runtime"] }),
+      expect.objectContaining({ platform: "linux", batch: "runtime", brands: ["runtime"] }),
+    ]);
+  });
 });

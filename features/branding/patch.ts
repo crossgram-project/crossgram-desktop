@@ -9,7 +9,7 @@ import type { Target } from "../../src/targets.js";
 interface PatchOptions {
   readonly root: string;
   readonly target: Target;
-  readonly brand: ResolvedBrand;
+  readonly brand: ResolvedBrand | null;
   readonly featureRoot: string;
 }
 
@@ -34,7 +34,7 @@ async function replacePngs(source: string, directories: readonly string[]): Prom
   }
 }
 
-async function replaceApplicationIcons(options: PatchOptions): Promise<void> {
+async function replaceApplicationIcons(options: PatchOptions & { readonly brand: ResolvedBrand }): Promise<void> {
   if (!options.brand.icon) return;
   const source = join(options.featureRoot, "assets", options.brand.icon);
   const art = join(options.root, "Telegram", "Resources", "art");
@@ -60,6 +60,11 @@ async function replaceApplicationIcons(options: PatchOptions): Promise<void> {
 export async function patchBranding(options: PatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);
   const { brand } = options;
+
+  if (!brand) {
+    await patchRuntimeBranding(options, context);
+    return;
+  }
 
   await context.edit(versionRoot, (file) => {
     file.replacePattern(/^constexpr auto AppId = "[^"]*"_cs;$/m, `constexpr auto AppId = "${brand.windowsAppId}"_cs;`);
@@ -131,5 +136,81 @@ export async function patchBranding(options: PatchOptions): Promise<void> {
     file.replaceEvery(linuxBaseId, brand.linuxId);
   });
 
-  await replaceApplicationIcons(options);
+  await replaceApplicationIcons(options as PatchOptions & { readonly brand: ResolvedBrand });
+}
+
+/**
+ * Patch one universal binary. Unlike the legacy per-brand mode this keeps
+ * platform metadata stable and stores the selected display brand in tdata.
+ * The menu is available from the main menu and a restart applies the change.
+ */
+async function patchRuntimeBranding(
+  options: PatchOptions,
+  context: PatchContext,
+): Promise<void> {
+  const sourceRoot = "Telegram/SourceFiles";
+  await context.install("branding_runtime.h", `${sourceRoot}/crossgram/branding_runtime.h`);
+  await context.install("branding_runtime.cpp", `${sourceRoot}/crossgram/branding_runtime.cpp`);
+  await context.edit(`${sourceRoot}/crossgram/branding_runtime.cpp`, (file) => {
+    file.replace(
+      '{ "cross", "Crossgram" },',
+      `{ "cross", "${options.target.crossName}" },`,
+      `{ "cross", "${options.target.crossName}" },`,
+    );
+  });
+
+  await context.edit("Telegram/CMakeLists.txt", (file) => {
+    file.insertBefore(
+      "if (CMAKE_GENERATOR STREQUAL Xcode)",
+      "# Crossgram runtime branding\nset(crossgram_runtime_branding ON)\n\n",
+      "crossgram_runtime_branding",
+    );
+    file.insertAfter(
+      "    countries/countries_manager.h",
+      "\n    crossgram/branding_runtime.cpp\n    crossgram/branding_runtime.h",
+      "crossgram/branding_runtime.cpp",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/core/application.cpp`, (file) => {
+    file.insertAfter(
+      '#include "core/application.h"',
+      '\n#include "crossgram/branding_runtime.h"',
+      '#include "crossgram/branding_runtime.h"',
+    );
+    file.insertAfter(
+      "\tstartLocalStorage();",
+      "\n\tCrossgram::Branding::Initialize();",
+      "Crossgram::Branding::Initialize();",
+    );
+  });
+
+  await context.edit(`${sourceRoot}/window/window_main_menu.cpp`, (file) => {
+    file.insertAfter(
+      '#include "settings/settings_common.h"',
+      '\n#include "crossgram/branding_runtime.h"',
+      '#include "crossgram/branding_runtime.h"',
+    );
+    file.insertBefore(
+      '\taddAction(\n\t\ttr::lng_menu_settings(),',
+      '\taddAction(\n\t\tQString::fromUtf8("Crossgram brand"),\n\t\t{ &st::menuIconSettings }\n\t)->setClickedCallback([=] {\n\t\t_contextMenu = base::make_unique_q<Ui::PopupMenu>(this, st::popupMenuExpandedSeparator);\n\t\tCrossgram::Branding::FillMenu(_contextMenu.get());\n\t\t_contextMenu->popup(QCursor::pos());\n\t});\n',
+      'Crossgram::Branding::FillMenu(_contextMenu.get());',
+    );
+  });
+
+  await context.edit(`${sourceRoot}/window/main_window.cpp`, (file) => {
+    file.insertAfter(
+      '#include "window/main_window.h"',
+      '\n#include "crossgram/branding_runtime.h"',
+      '#include "crossgram/branding_runtime.h"',
+    );
+    file.replace(
+      'setTitle((user.isEmpty() ? u"Telegram"_q : user) + added + suffix);',
+      'setTitle((user.isEmpty() ? Crossgram::Branding::CurrentTitle() : user) + added + suffix);',
+      'Crossgram::Branding::CurrentTitle() : user',
+    );
+  });
+
+  // Runtime mode deliberately leaves compile-time platform identifiers alone.
+  // This makes a single package usable under every selectable brand.
 }
