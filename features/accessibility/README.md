@@ -40,6 +40,10 @@ A hidden state that changes without any of those notifications keeps the previou
 rows until the next one, which is the same laziness the surrounding accessibility
 code already has when it repairs a cached focus index on the next key press.
 
+Upstream still rebuilds the row list on every read, so this cache lives in the
+patcher. If an upstream ever caches the rows itself, the anchors below stop
+matching and the check workflow fails loudly, and this feature can be dropped.
+
 ## Tests
 
 `tests/accessibility.test.ts` builds the upstream shape of all four files,
