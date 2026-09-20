@@ -41,6 +41,15 @@ memory-cached document into an ordered local-file list; if any selected item
 cannot be materialized, the external file payload is suppressed rather than
 sending only part of the selection.
 
+Telegram Desktop exposes every loaded message of a chat as an accessibility
+row and rebuilds that row list, asking every message whether it is hidden, on
+every read. A screen reader reads several properties per row and walks all
+rows on a focus change, so one focus change in a long history used to cost
+quadratic time on the UI thread and froze the client. Patched clients keep the
+row list cached and drop it whenever messages, views, histories, or the
+migrated history change; see [`features/accessibility`](features/accessibility)
+for the invalidation points.
+
 Supported upstreams:
 
 - `telegramdesktop/tdesktop`
