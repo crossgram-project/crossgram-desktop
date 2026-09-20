@@ -1,5 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { patchAccessibility } from "../features/accessibility/patch.js";
@@ -61,6 +62,16 @@ const widgetSource = [
   "\t}) | rpl::on_next([this] {",
   "\t\tmouseActionCancel();",
   "\t}, lifetime());",
+  "}",
+  "",
+  "void HistoryInner::layoutChanged() {",
+  "\t\tmarkReadMetricsStale();",
+  "\t\tif (view->isUnderCursor()) {",
+  "\t\t\tmouseActionUpdate();",
+  "\t\t}",
+  "}",
+  "",
+  "void HistoryInner::updateSize() {",
   "}",
   "",
   "void HistoryInner::itemRemoved(not_null<const HistoryItem*> item) {",
@@ -130,7 +141,9 @@ const listWidgetSource = [
 ].join("\n");
 
 async function fixture(eol = "\n"): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-accessibility-"));
+  const temporaryRoot = path.resolve("../work/tests/accessibility-unit");
+  await mkdir(temporaryRoot, { recursive: true });
+  const root = await mkdtemp(path.join(temporaryRoot, "fixture-"));
   roots.push(root);
   const history = path.join(root, "Telegram/SourceFiles/history");
   const listView = path.join(history, "view");
@@ -175,7 +188,7 @@ describe("desktop message history accessibility patch", () => {
 
     expect(first.header).toContain("const std::vector<Element*> &accessibleElements() const;");
     expect(first.header).toContain("void invalidateAccessibleElements();");
-    expect(first.header).toContain("void accessibilityRowsRebuilt() override;");
+    expect(first.header).not.toContain("accessibilityRowsRebuilt");
     expect(first.header).toContain("mutable std::vector<Element*> _accessibleElements;");
     expect(first.header).toContain("mutable bool _accessibleElementsValid = false;");
 
@@ -185,7 +198,8 @@ describe("desktop message history accessibility patch", () => {
     expect(first.widget).toContain("_accessibleElements.push_back(message.get());");
     expect(first.widget).toContain("_accessibleElementsValid = true;");
     expect(first.widget).toContain("void HistoryInner::invalidateAccessibleElements() {");
-    expect(first.widget).toContain("void HistoryInner::accessibilityRowsRebuilt() {\n\tinvalidateAccessibleElements();");
+    expect(first.widget).toContain("void HistoryInner::updateSize() {\n\tinvalidateAccessibleElements();");
+    expect(first.widget).toContain("invalidateAccessibleElements();\n\t\tmarkReadMetricsStale();");
     expect(first.widget).not.toContain("std::vector<Element*> result;");
 
     // Every read of the list inside the widget shares the cached rows
@@ -202,11 +216,9 @@ describe("desktop message history accessibility patch", () => {
     expect(first.widget).toContain("if (_migrated != migrated) {\n\t\tinvalidateAccessibleElements();");
     expect((first.widget.match(/invalidateAccessibleElements\(\);/g) ?? []).length).toBeGreaterThanOrEqual(5);
 
-    // The base list tells the widget when the rows were rebuilt for a new
-    // slice, which is the only notification for a row set that changed
-    // without adding or removing a view.
-    expect(first.listHeader).toContain("virtual void accessibilityRowsRebuilt() {");
-    expect(first.listWidget).toContain("pruneAccessibilityIdentities();\n\taccessibilityRowsRebuilt();");
+    // ListWidget is a separate final widget, not the base of HistoryInner.
+    expect(first.listHeader).toBe(listHeaderSource);
+    expect(first.listWidget).toBe(listWidgetSource);
 
     expect(balancedBraces(first.header)).toBe(true);
     expect(balancedBraces(first.widget)).toBe(true);
@@ -222,7 +234,7 @@ describe("desktop message history accessibility patch", () => {
     await patchAccessibility({ root, target: targetById(targetId) });
     const { widget, listWidget } = await patched(root);
     expect(widget).toContain("_accessibleElementsValid = true;");
-    expect(listWidget).toContain("accessibilityRowsRebuilt();");
+    expect(listWidget).toBe(listWidgetSource);
   });
 
   it("preserves CRLF sources", async () => {
@@ -246,3 +258,99 @@ describe("desktop message history accessibility patch", () => {
       .rejects.toThrow(/Could not find text 'std::vector<HistoryView::Element\*> HistoryInner::accessibleElements/);
   });
 });
+
+function cppFunction(source: string, signature: string): string {
+  const start = source.indexOf(signature);
+  if (start < 0) throw new Error("Missing generated function " + signature);
+  const open = source.indexOf("{", start);
+  let depth = 0;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === "{") depth += 1;
+    if (source[i] === "}" && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error("Unbalanced generated function " + signature);
+}
+
+it("compiles against the actual independent widget bases and exercises cached row lifetimes", async () => {
+  const root = await fixture();
+  await patchAccessibility({ root, target: targetById("tdesktop") });
+  const { header, widget } = await patched(root);
+  const functions = [
+    "const std::vector<HistoryView::Element*> &HistoryInner::accessibleElements() const",
+    "void HistoryInner::invalidateAccessibleElements()",
+    "void HistoryInner::updateSize()",
+    "void HistoryInner::viewRemoved(",
+  ].map(signature => cppFunction(widget, signature)).join("\n");
+  const source = `#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <vector>
+using quintptr = std::uintptr_t;
+template <typename T> using not_null = T;
+namespace Ui {
+struct RpWidget { virtual ~RpWidget() = default; };
+struct AbstractTooltipShower { virtual ~AbstractTooltipShower() = default; };
+}
+int reads = 0;
+namespace HistoryView {
+struct Element { bool hidden = false; bool isHidden() const { ++reads; return hidden; } };
+}
+struct Block { std::vector<std::unique_ptr<HistoryView::Element>> messages; };
+struct History { std::vector<std::unique_ptr<Block>> blocks; };
+struct Overlay { void viewGone(const HistoryView::Element*) {} };
+// HistoryInner and ListWidget are independent widgets upstream, not a hierarchy.
+class HistoryInner : public Ui::RpWidget, public Ui::AbstractTooltipShower {
+public:
+ using Element = HistoryView::Element;
+ HistoryInner(History *history, History *migrated) : _history(history), _migrated(migrated) {}
+ const auto &rows() const { return accessibleElements(); }
+ void invalidate() { invalidateAccessibleElements(); }
+ void updateSize();
+ void viewRemoved(not_null<const Element*> view);
+ private:
+ History *_history;
+ History *_migrated;
+ Overlay *_overlayHost = nullptr;
+${header}
+};
+${functions}
+int main() {
+ History primary, migrated;
+ primary.blocks.push_back(std::make_unique<Block>());
+ migrated.blocks.push_back(std::make_unique<Block>());
+ auto &messages = primary.blocks.front()->messages;
+ auto &oldMessages = migrated.blocks.front()->messages;
+ messages.push_back(std::make_unique<HistoryView::Element>());
+ messages.push_back(std::make_unique<HistoryView::Element>());
+ oldMessages.push_back(std::make_unique<HistoryView::Element>());
+ oldMessages.push_back(std::make_unique<HistoryView::Element>());
+ oldMessages.back()->hidden = true;
+ HistoryInner widget(&primary, &migrated);
+ assert(widget.rows().size() == 3);
+ assert(widget.rows()[0] == oldMessages[0].get());
+ assert(widget.rows()[1] == messages[0].get());
+ for (int n = 0; n != 200; ++n) assert(widget.rows().size() == 3);
+ assert(reads == 4);
+ messages[0]->hidden = true;
+ widget.updateSize();
+ assert(widget.rows().size() == 2);
+ assert(reads == 8);
+ messages.push_back(std::make_unique<HistoryView::Element>());
+ widget.invalidate();
+ assert(widget.rows().size() == 3);
+ widget.viewRemoved(messages[1].get());
+ messages.erase(messages.begin() + 1);
+ assert(widget.rows().size() == 2);
+ assert(widget.rows().back() == messages.back().get());
+ widget.invalidate();
+ primary.blocks.clear();
+ assert(widget.rows().size() == 1);
+}
+`;
+  const cpp = path.join(root, "cache-test.cpp");
+  const binary = path.join(root, process.platform === "win32" ? "cache-test.exe" : "cache-test");
+  await writeFile(cpp, source, "utf8");
+  const run = promisify(execFile);
+  await run(process.env.CXX || "clang++", ["-std=c++20", "-O0", cpp, "-o", binary]);
+  await run(binary);
+}, 30_000);

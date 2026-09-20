@@ -8,8 +8,6 @@ interface PatchOptions {
 
 const headerPath = "Telegram/SourceFiles/history/history_inner_widget.h";
 const widgetPath = "Telegram/SourceFiles/history/history_inner_widget.cpp";
-const listHeaderPath = "Telegram/SourceFiles/history/view/history_view_list_widget.h";
-const listWidgetPath = "Telegram/SourceFiles/history/view/history_view_list_widget.cpp";
 
 const originalElements = [
   "std::vector<HistoryView::Element*> HistoryInner::accessibleElements() const {",
@@ -66,10 +64,6 @@ const cachedElements = [
   "\t// saves, so the notifications below simply drop it.",
   "\t_accessibleElementsValid = false;",
   "}",
-  "",
-  "void HistoryInner::accessibilityRowsRebuilt() {",
-  "\tinvalidateAccessibleElements();",
-  "}",
 ].join("\n");
 
 export async function patchAccessibility(options: PatchOptions): Promise<void> {
@@ -81,7 +75,6 @@ export async function patchAccessibility(options: PatchOptions): Promise<void> {
       [
         "\t[[nodiscard]] const std::vector<Element*> &accessibleElements() const;",
         "\tvoid invalidateAccessibleElements();",
-        "\tvoid accessibilityRowsRebuilt() override;",
       ].join("\n"),
     );
     file.insertAfter(
@@ -97,6 +90,17 @@ export async function patchAccessibility(options: PatchOptions): Promise<void> {
 
   await context.edit(widgetPath, (file) => {
     file.replace(originalElements, cachedElements);
+    // HistoryInner is not derived from ListWidget. Its own geometry and
+    // layout notifications cover slice changes and in-place visibility changes.
+    file.insertAfter(
+      "void HistoryInner::updateSize() {",
+      "\n\tinvalidateAccessibleElements();",
+      "void HistoryInner::updateSize() {\n\tinvalidateAccessibleElements();",
+    );
+    file.replace(
+      "\t\tmarkReadMetricsStale();\n\t\tif (view->isUnderCursor()) {",
+      "\t\tinvalidateAccessibleElements();\n\t\tmarkReadMetricsStale();\n\t\tif (view->isUnderCursor()) {",
+    );
     file.replaceEvery(
       "const auto elements = accessibleElements();",
       "const auto &elements = accessibleElements();",
@@ -156,30 +160,6 @@ export async function patchAccessibility(options: PatchOptions): Promise<void> {
         "\tconst auto migrated = _history->migrateFrom();",
         "\tif (_migrated != migrated) {",
         "\t\tinvalidateAccessibleElements();",
-      ].join("\n"),
-    );
-  });
-
-  await context.edit(listHeaderPath, (file) => {
-    file.insertAfter(
-      "\tvoid pruneAccessibilityIdentities();",
-      [
-        "",
-        "\t// Called once the rows were rebuilt for a new slice, so that a",
-        "\t// widget can drop everything derived from the previous rows.",
-        "\tvirtual void accessibilityRowsRebuilt() {",
-        "\t}",
-      ].join("\n"),
-      "accessibilityRowsRebuilt",
-    );
-  });
-
-  await context.edit(listWidgetPath, (file) => {
-    file.replace(
-      "\tpruneAccessibilityIdentities();",
-      [
-        "\tpruneAccessibilityIdentities();",
-        "\taccessibilityRowsRebuilt();",
       ].join("\n"),
     );
   });

@@ -174,4 +174,4 @@ yarn check
 yarn build
 ```
 
-The TypeScript test suite covers structural function matching, CRLF preservation, ambiguous-anchor rejection, and the supported-target registry.
+The test suite covers structural function matching, CRLF preservation, ambiguous-anchor rejection, and the supported-target registry. Runtime tests require `ffmpeg`, `ffprobe`, and a C++20 compiler (`clang++` by default; override its executable with `CXX`). The accessibility regression compiles and executes the generated cache code instead of relying only on text assertions.

@@ -21,15 +21,17 @@ This patch keeps the row list until something reports that it may have changed:
 - `invalidateAccessibleElements()` drops the cache. It is called from every
   notification that can change the rows: a new item added to the shown history,
   history unload and clear, removal of an item, destruction of any message view,
-  a change of the migrated history, and `accessibilityRowsRebuilt()`, the new
-  `ListWidget` hook that the base list calls at the end of `refreshRows()`.
+  a change of the migrated history, and the widget's own `updateSize()` and
+  `viewLayoutChanged` notifications.
 
 Dropping the cache for every destroyed view is what keeps the cached raw
 `HistoryView::Element*` pointers valid, because a slice update destroys and
-recreates views. The `refreshRows()` hook is what covers a row set that changed
-without adding or removing a view, for example when rows become hidden or visible
-again in place; `ListWidget` already prunes its accessibility identities at that
-exact point.
+recreates views. Geometry updates and view-layout notifications also cover
+loaded slices and rows becoming hidden or visible in place. `HistoryInner` and
+`HistoryView::ListWidget` are independent widgets; `ListWidget` is not a base
+class of `HistoryInner`, so adding a virtual method there cannot provide a
+`HistoryInner` override or invalidate its cache. This patch leaves `ListWidget`
+unchanged.
 
 The cache lives in `HistoryInner` instead of `lib_ui`'s `Ui::Accessible::Item`
 because only the widget knows when its rows changed: the library can tell that a
@@ -46,10 +48,13 @@ matching and the check workflow fails loudly, and this feature can be dropped.
 
 ## Tests
 
-`tests/accessibility.test.ts` builds the upstream shape of all four files,
-applies the patch, checks the cache, every invalidation call site and the new
-hook, verifies that the patch is idempotent, keeps CRLF, applies to all four
-targets, and fails loudly when upstream rewrites the list.
+`tests/accessibility.test.ts` verifies the cache and all invalidation call sites,
+idempotence, CRLF preservation, and unchanged sibling-list sources. It also
+compiles and executes the generated cache implementation in a C++20 harness
+with the actual independent widget-base shape. This rejects invalid overrides
+and checks repeated-read reuse, geometry invalidation, migrated-row ordering,
+hidden rows, and removal of cached view pointers. Use `clang++` or set `CXX` to
+a compatible C++ compiler.
 
 `tests/accessibility.e2e.test.ts` repeats that against real release sources when
 `CROSSGRAM_DESKTOP_ACCESSIBILITY_SOURCE_ROOT` points at clean snapshots with one

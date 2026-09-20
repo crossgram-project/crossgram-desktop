@@ -1,5 +1,4 @@
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { patchAccessibility } from "../features/accessibility/patch.js";
@@ -45,12 +44,14 @@ function balancedBraces(source: string): boolean {
 
 // Point this at clean release source snapshots, one directory per target. The
 // unit tests cover the row cache itself; this runs the same patch against the
-// real message history of every supported upstream and reads back the result
-// the way the C++ compiler would.
+// real message history of every supported upstream. The unit suite separately
+// compiles the generated cache code; this suite verifies structural integration.
 const sourceRoot = process.env.CROSSGRAM_DESKTOP_ACCESSIBILITY_SOURCE_ROOT;
 describe.skipIf(!sourceRoot)("real upstream message history accessibility", () => {
   it.each(targets)("patches $id release sources idempotently", async (target) => {
-    const fixture = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-accessibility-real-"));
+    const temporaryRoot = path.resolve("../work/tests/accessibility-e2e");
+    await mkdir(temporaryRoot, { recursive: true });
+    const fixture = await mkdtemp(path.join(temporaryRoot, "fixture-"));
     roots.push(fixture);
     const root = path.join(fixture, target.id);
     for (const relative of relativePaths) {
@@ -61,6 +62,7 @@ describe.skipIf(!sourceRoot)("real upstream message history accessibility", () =
       );
     }
 
+    const original = await snapshot(root);
     await patchAccessibility({ root, target });
     const sources = await snapshot(root);
     const { header, widget, listHeader, listWidget } = sources;
@@ -69,10 +71,13 @@ describe.skipIf(!sourceRoot)("real upstream message history accessibility", () =
     expect(header).toContain("mutable std::vector<Element*> _accessibleElements;");
     expect(widget).toContain("const std::vector<HistoryView::Element*> &HistoryInner::accessibleElements() const {");
     expect(widget).toContain("void HistoryInner::invalidateAccessibleElements() {");
-    expect(widget).toContain("void HistoryInner::accessibilityRowsRebuilt() {");
-    expect(header).toContain("void accessibilityRowsRebuilt() override;");
-    expect(listHeader).toContain("virtual void accessibilityRowsRebuilt() {");
-    expect(listWidget).toContain("pruneAccessibilityIdentities();\n\taccessibilityRowsRebuilt();");
+    expect(header).not.toContain("accessibilityRowsRebuilt");
+    expect(header).toMatch(/class HistoryInner\s*:\s*public Ui::RpWidget\s*,\s*public Ui::AbstractTooltipShower/);
+    expect(listHeader).toMatch(/class ListWidget final\s*:\s*public Ui::RpWidget/);
+    expect(widget).toContain("void HistoryInner::updateSize() {\n\tinvalidateAccessibleElements();");
+    expect(widget).toContain("invalidateAccessibleElements();\n\t\tmarkReadMetricsStale();");
+    expect(listHeader).toBe(original.listHeader);
+    expect(listWidget).toBe(original.listWidget);
     expect(widget).not.toContain("const auto elements = accessibleElements();");
     expect(widget).not.toContain("std::vector<Element*> result;");
 
