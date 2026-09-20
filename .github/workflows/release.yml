@@ -28,9 +28,9 @@ on:
           - ayugram
           - materialgram
       brands:
-        description: Comma-separated brands to build, runtime for one universal package, or all
+        description: Runtime universal package (default), or explicit legacy brands
         required: false
-        default: all
+        default: runtime
         type: string
 
 permissions:
@@ -788,7 +788,7 @@ jobs:
       (github.event_name == 'schedule' ||
        (inputs.platforms == 'all' &&
         inputs.target == 'all' &&
-        inputs.brands == 'all'))
+        (inputs.brands == 'runtime' || inputs.brands == 'all')))
     needs: [plan, build]
     runs-on: ubuntu-latest
     steps:

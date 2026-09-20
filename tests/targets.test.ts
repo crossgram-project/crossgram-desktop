@@ -56,6 +56,7 @@ describe("targets", () => {
       readFile(resolve(repositoryRoot, ".github/workflows/release.yml"), "utf8"),
     ]);
     const expected = targets.flatMap(({ id }) => [
+      "runtime",
       "cross",
       "qq",
       "wechat",
@@ -91,7 +92,8 @@ describe("targets", () => {
     expect(release).toContain("github.event_name == 'schedule'");
     expect(release).toContain("inputs.platforms == 'all'");
     expect(release).toContain("inputs.target == 'all'");
-    expect(release).toContain("inputs.brands == 'all'");
+    expect(release).toContain("(inputs.brands == 'runtime' || inputs.brands == 'all')");
+    expect(release).toMatch(/brands:\s+description:[^\n]+\s+required: false\s+default: runtime/);
     expect(release).toContain('release_tag="crossgram-${GITHUB_RUN_NUMBER}"');
     expect(release).toContain("GH_TOKEN: ${{ github.token }}");
     expect(release).not.toContain("CROSSGRAM_RELEASE_TOKEN");

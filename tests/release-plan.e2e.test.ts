@@ -21,11 +21,12 @@ afterEach(async () => {
 });
 
 describe("release planner script", () => {
-  it("resolves upstream releases and writes only missing scheduled jobs", async () => {
+  it.each(["cross", "runtime", ""])("resolves upstream releases with brand filter %j", async (filter) => {
+    const brand = filter || "runtime";
     const completeAssets = [
-      ...releaseArtifactNames("tdesktop", "cross", "windows", "v1"),
-      ...releaseArtifactNames("ayugram", "cross", "windows", "v1"),
-      releaseArtifactNames("tdesktop-x64", "cross", "windows", "v1")[0],
+      ...releaseArtifactNames("tdesktop", brand, "windows", "v1"),
+      ...releaseArtifactNames("ayugram", brand, "windows", "v1"),
+      releaseArtifactNames("tdesktop-x64", brand, "windows", "v1")[0],
     ].map((name) => ({ name }));
     const upstreamTags = new Map([
       ["/repos/telegramdesktop/tdesktop/releases/latest", "v1"],
@@ -82,7 +83,7 @@ describe("release planner script", () => {
         GITHUB_TOKEN: "test-token",
         PLATFORM_FILTER: "windows",
         TARGET_FILTER: "all",
-        BRAND_FILTER: "cross",
+        BRAND_FILTER: filter,
       },
     });
 
@@ -95,7 +96,7 @@ describe("release planner script", () => {
       "tdesktop-x64",
       "materialgram",
     ]);
-    expect(matrix.every(({ brands }) => brands.join() === "cross")).toBe(true);
+    expect(matrix.every(({ brands }) => brands.join() === brand)).toBe(true);
     expect(await readFile(summary, "utf8")).toContain("Planned 2 build jobs.");
   });
 });

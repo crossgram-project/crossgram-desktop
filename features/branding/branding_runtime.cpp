@@ -1,13 +1,12 @@
 #include "crossgram/branding_runtime.h"
 
 #include "core/application.h"
-#include "core/config.h"
+#include "settings.h"
 #include "ui/widgets/popup_menu.h"
-#include "base/qt_support.h"
 
 #include <QtCore/QFile>
 #include <QtCore/QSaveFile>
-#include <QtCore/QTextStream>
+#include <QtGui/QAction>
 #include <QtGui/QGuiApplication>
 
 namespace Crossgram::Branding {
@@ -51,7 +50,6 @@ QString CurrentId;
 void Initialize() {
 	CurrentId = QString::fromUtf8(Find(Read())->id);
 	const auto title = CurrentTitle();
-	QCoreApplication::setApplicationName(title);
 	QGuiApplication::setApplicationDisplayName(title);
 }
 

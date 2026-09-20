@@ -20,6 +20,9 @@ jobs:
       matrix:
         build:
           - target: tdesktop
+            brand: runtime
+            repository: telegramdesktop/tdesktop
+          - target: tdesktop
             brand: cross
             repository: telegramdesktop/tdesktop
           - target: tdesktop
@@ -38,6 +41,9 @@ jobs:
             brand: discord
             repository: telegramdesktop/tdesktop
           - target: tdesktop-x64
+            brand: runtime
+            repository: TDesktop-x64/tdesktop
+          - target: tdesktop-x64
             brand: cross
             repository: TDesktop-x64/tdesktop
           - target: tdesktop-x64
@@ -56,6 +62,9 @@ jobs:
             brand: discord
             repository: TDesktop-x64/tdesktop
           - target: ayugram
+            brand: runtime
+            repository: AyuGram/AyuGramDesktop
+          - target: ayugram
             brand: cross
             repository: AyuGram/AyuGramDesktop
           - target: ayugram
@@ -73,6 +82,9 @@ jobs:
           - target: ayugram
             brand: discord
             repository: AyuGram/AyuGramDesktop
+          - target: materialgram
+            brand: runtime
+            repository: kukuruzka165/materialgram
           - target: materialgram
             brand: cross
             repository: kukuruzka165/materialgram
@@ -186,7 +198,7 @@ jobs:
           grep -Fq 'cbor_encode_double=crossgram_libcbor_encode_double' "$cmake_file"
 
       - name: Verify opt-in E2E feature
-        if: matrix.build.brand == 'cross'
+        if: matrix.build.brand == 'cross' || matrix.build.brand == 'runtime'
         working-directory: patcher
         env:
           TARGET: ${{ matrix.build.target }}

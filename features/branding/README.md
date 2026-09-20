@@ -2,8 +2,8 @@
 
 This feature gives every build an independent application name and platform identifier. The default `cross` brand keeps the upstream icon; `qq`, `wechat`, `wecom`, `dingtalk`, and `discord` use the corresponding current App Store artwork.
 
-For lower-cost distribution, apply with `--brand runtime`. Runtime mode ships a
-single binary and adds a **Crossgram brand** action to the main menu. The
+The default mode is `--brand runtime`. Explicit legacy per-brand modes are still supported. Runtime mode ships a
+single binary with stable Cross application identifiers and adds a **Crossgram brand** action to the main menu. The
 selected id is persisted in `tdata/crossgram-brand`; changing it restarts the
 client so the next launch uses the selected display name. Platform package
 identifiers remain those of the universal package by design.

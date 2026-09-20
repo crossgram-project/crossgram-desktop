@@ -2,7 +2,7 @@ import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import pngToIco from "png-to-ico";
 import sharp from "sharp";
-import type { ResolvedBrand } from "../../src/brands.js";
+import { brandById, resolveBrand, type ResolvedBrand } from "../../src/brands.js";
 import { PatchContext } from "../../src/core/patch-context.js";
 import type { Target } from "../../src/targets.js";
 
@@ -62,6 +62,7 @@ export async function patchBranding(options: PatchOptions): Promise<void> {
   const { brand } = options;
 
   if (!brand) {
+    await patchBranding({ ...options, brand: resolveBrand(options.target, brandById("cross")) });
     await patchRuntimeBranding(options, context);
     return;
   }
@@ -141,7 +142,7 @@ export async function patchBranding(options: PatchOptions): Promise<void> {
 
 /**
  * Patch one universal binary. Unlike the legacy per-brand mode this keeps
- * platform metadata stable and stores the selected display brand in tdata.
+ * a stable Cross platform identity and stores the selected display brand in tdata.
  * The menu is available from the main menu and a restart applies the change.
  */
 async function patchRuntimeBranding(
@@ -160,11 +161,6 @@ async function patchRuntimeBranding(
   });
 
   await context.edit("Telegram/CMakeLists.txt", (file) => {
-    file.insertBefore(
-      "if (CMAKE_GENERATOR STREQUAL Xcode)",
-      "# Crossgram runtime branding\nset(crossgram_runtime_branding ON)\n\n",
-      "crossgram_runtime_branding",
-    );
     file.insertAfter(
       "    countries/countries_manager.h",
       "\n    crossgram/branding_runtime.cpp\n    crossgram/branding_runtime.h",
@@ -193,7 +189,7 @@ async function patchRuntimeBranding(
     );
     file.insertBefore(
       '\taddAction(\n\t\ttr::lng_menu_settings(),',
-      '\taddAction(\n\t\tQString::fromUtf8("Crossgram brand"),\n\t\t{ &st::menuIconSettings }\n\t)->setClickedCallback([=] {\n\t\t_contextMenu = base::make_unique_q<Ui::PopupMenu>(this, st::popupMenuExpandedSeparator);\n\t\tCrossgram::Branding::FillMenu(_contextMenu.get());\n\t\t_contextMenu->popup(QCursor::pos());\n\t});\n',
+      '\taddAction(\n\t\trpl::single(QString::fromUtf8("Crossgram brand")),\n\t\t{ &st::menuIconSettings }\n\t)->setClickedCallback([=] {\n\t\t_contextMenu = base::make_unique_q<Ui::PopupMenu>(this, st::popupMenuExpandedSeparator);\n\t\tCrossgram::Branding::FillMenu(_contextMenu.get());\n\t\t_contextMenu->popup(QCursor::pos());\n\t});\n',
       'Crossgram::Branding::FillMenu(_contextMenu.get());',
     );
   });
@@ -204,13 +200,13 @@ async function patchRuntimeBranding(
       '\n#include "crossgram/branding_runtime.h"',
       '#include "crossgram/branding_runtime.h"',
     );
-    file.replace(
-      'setTitle((user.isEmpty() ? u"Telegram"_q : user) + added + suffix);',
-      'setTitle((user.isEmpty() ? Crossgram::Branding::CurrentTitle() : user) + added + suffix);',
+    file.replacePattern(
+      /setTitle\(\(user\.isEmpty\(\) \? u"[^"\r\n]+"_q : user\)/,
+      'setTitle((user.isEmpty() ? Crossgram::Branding::CurrentTitle() : user)',
       'Crossgram::Branding::CurrentTitle() : user',
     );
   });
 
-  // Runtime mode deliberately leaves compile-time platform identifiers alone.
+  // Runtime mode uses the stable Cross platform identity for every selection.
   // This makes a single package usable under every selectable brand.
 }

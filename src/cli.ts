@@ -22,7 +22,7 @@ const { positionals, values } = parseArgs({
   options: {
     root: { type: "string", short: "r" },
     target: { type: "string", short: "t" },
-    brand: { type: "string", short: "b", default: "cross" },
+    brand: { type: "string", short: "b", default: "runtime" },
     feature: { type: "string", multiple: true, default: [] },
     "github-output": { type: "boolean", default: false },
   },
@@ -36,22 +36,23 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
 } else {
   const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const target = targetById(values.target);
-  const requestedBrand = values.brand ?? "cross";
+  const requestedBrand = values.brand ?? "runtime";
   // `runtime` builds keep one binary and expose all themed brands in-app.
   const brand = requestedBrand === "runtime"
     ? null
     : resolveBrand(target, brandById(requestedBrand));
+  const identity = brand ?? resolveBrand(target, brandById("cross"));
   const features = resolveFeatures(values.feature ?? []);
   if (command === "metadata") {
     const metadata = {
       target: target.id,
       repository: target.repository,
       upstreamExecutable: target.executable,
-      executable: brand?.executable ?? target.crossName,
-      displayName: brand?.title ?? target.crossName,
-      packageSuffix: brand?.packageSuffix ?? "crossgram",
-      linuxId: brand?.linuxId ?? `${target.desktopFile.slice(0, -".desktop".length)}.crossgram`,
-      windowsAppId: brand?.windowsAppId ?? "runtime",
+      executable: identity.executable,
+      displayName: identity.title,
+      packageSuffix: identity.packageSuffix,
+      linuxId: identity.linuxId,
+      windowsAppId: identity.windowsAppId,
       apiId: target.apiId,
       apiHash: target.apiHash,
       brand: brand?.id ?? "runtime",

@@ -94,9 +94,9 @@ const releases = await resolveUpstreamReleases();
 const publishedAssets = eventName === "schedule"
   ? await listPublishedAssets()
   : new Set<string>();
-// Scheduled releases use the universal runtime-brand package by default. A
+// Releases use the universal runtime-brand package by default. A
 // non-empty BRAND_FILTER still allows targeted legacy per-brand rebuilds.
-const brandFilter = process.env.BRAND_FILTER || (eventName === "schedule" ? "runtime" : "all");
+const brandFilter = process.env.BRAND_FILTER || "runtime";
 const matrix = createReleasePlan({
   eventName,
   platformFilter: process.env.PLATFORM_FILTER,

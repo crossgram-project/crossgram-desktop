@@ -57,7 +57,7 @@ Node.js 22 or newer and Yarn 4 are required.
 ```bash
 corepack enable
 yarn install --immutable
-yarn apply --target tdesktop --brand cross --root /path/to/tdesktop
+yarn apply --target tdesktop --brand runtime --root /path/to/tdesktop
 ```
 
 To produce one universal package instead of one package per themed brand, use
@@ -70,13 +70,13 @@ Normal builds do not contain the semantic automation endpoint. Add
 [`features/e2e/README.md`](features/e2e/README.md) for the runtime protocol and
 driver examples.
 
-Target ids are `tdesktop`, `tdesktop-x64`, `ayugram`, and `materialgram`. Brand ids are `cross`, `qq`, `wechat`, `wecom`, `dingtalk`, and `discord`; `cross` is the default. `runtime` is a universal build mode that allows switching among all six brands in-app. Applying the patch repeatedly is supported and produces byte-identical output.
+Target ids are `tdesktop`, `tdesktop-x64`, `ayugram`, and `materialgram`. Brand ids are `cross`, `qq`, `wechat`, `wecom`, `dingtalk`, and `discord`; `runtime` is the default. Legacy per-brand builds remain available only when explicitly requested. `runtime` is a universal build mode that allows switching among all six brands in-app. Applying the patch repeatedly is supported and produces byte-identical output.
 
 The patcher performs unique, structural edits around C++ function bodies, declarations, includes, CMake metadata, and desktop integration files. A missing or ambiguous anchor is a hard failure. Large injected implementations and their integration logic are isolated under [`features/server-switch`](features/server-switch), [`features/branding`](features/branding), and [`features/e2e`](features/e2e).
 
 ## Build branding
 
-Default builds use `CrossTelegram`, `Cross64Gram`, `CrossAyuGram`, or `CrossMaterialgram` and append `.crossgram` to the upstream platform identifier. Every supported upstream also ships these themed brands:
+Universal builds use a stable Cross platform identity and executable name; the menu changes only the display brand. Default builds use `CrossTelegram`, `Cross64Gram`, `CrossAyuGram`, or `CrossMaterialgram` and append `.crossgram` to the upstream platform identifier. Every supported upstream also ships these themed brands:
 
 - `QQ · Cross` / `.crossgram.qq`
 - `微信 · Cross` / `.crossgram.wechat`
@@ -127,10 +127,10 @@ tdata/<account-hash>/server-switch.json
 
 ## CI and releases
 
-[`check.yml`](.github/workflows/check.yml) resolves and patches all 24 target/brand combinations in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
+[`check.yml`](.github/workflows/check.yml) resolves and patches all 28 target/build-mode combinations (including runtime mode for every target) in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.
 
 [`release.yml`](.github/workflows/release.yml) resolves all upstream versions once and
-generates a dynamic matrix. Scheduled runs use the single `runtime` universal brand by
+generates a dynamic matrix. Scheduled and manual runs use the single `runtime` universal brand by
 default, while manual dispatches can request legacy per-brand batches with the
 `brands` input. Both modes inspect release assets produced from the current patcher
 commit and only rebuild missing package/symbol pairs.

@@ -2,15 +2,13 @@
 
 #include <QString>
 
-class QIcon;
-
 namespace Ui {
 class PopupMenu;
 }
 
 namespace Crossgram::Branding {
 
-// Initializes the persisted runtime brand and updates Qt application metadata.
+// Initializes the persisted runtime brand and updates the Qt display name.
 void Initialize();
 
 // Adds runtime brand choices to an already-owned popup menu.
