@@ -46,6 +46,14 @@ characters that carry no usable key information, so:
 - the `WM_CHAR` whose `wParam` is zero that `TranslateMessage` posts for a
   `VK_PACKET` press no longer reaches the mapper either.
 
+Characters also stop carrying a synthetic key code. Qt derived the key of a
+packet press from the low byte of the character, so an injected `，` arrived as
+`Qt::Key_Clear` and an injected ASCII letter arrived as that letter's key,
+which a shortcut could match if a modifier happened to be held while the text
+was injected. An injected character now reaches the client as text with
+`Qt::Key_Unknown` and `isAutoRepeat()` cleared, the shape Qt gives to every
+character that has no usable key information.
+
 Surrogate pairs are combined explicitly, because Qt only combines them while
 reading the character of a key press: the high half is remembered and the pair
 is committed through a `QInputMethodEvent`, exactly like the Qt code path that
