@@ -43,6 +43,10 @@ describe.skipIf(!sourceRoot)("real upstream CJK word segmentation", () => {
 				path.join(root, relative),
 				{ recursive: true });
 		}
+		const braceDelta = (source: string) =>
+			(source.match(/{/g) ?? []).length - (source.match(/}/g) ?? []).length;
+		const originalDeltas = await Promise.all(relativePaths.map(async (relative) =>
+			braceDelta(await readFile(path.join(root, relative), "utf8"))));
 		const options = {
 			root,
 			target,
@@ -69,6 +73,11 @@ describe.skipIf(!sourceRoot)("real upstream CJK word segmentation", () => {
 		expect(field).toContain("} else if (handleWordSegmentKey(e)) {");
 		expect(keyboard).toContain("Ui::Text::WordSegment::MoveForward(window, local)");
 		expect(keyboard).not.toContain("IsWordSeparator(one[0])");
+
+		// The patch replaces code, so the braces of every file it touches
+		// have to balance exactly as they did in the release.
+		const deltas = [text, header, field, fieldHeader, keyboard].map(braceDelta);
+		expect(deltas).toEqual(originalDeltas);
 
 		const before = [text, header, field, fieldHeader, keyboard];
 		const generated = await read(
