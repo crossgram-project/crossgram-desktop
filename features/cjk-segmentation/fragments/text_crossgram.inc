@@ -171,7 +171,16 @@ struct Dictionary {
 		|| (code >= 0xFFE0 && code <= 0xFFE5);  // ￠￡￢￣￤￥
 }
 
-// Whether the character splits words on its own, with an apostrophe that
+// Whether the character splits words on its own: the separator list of this
+// library, the punctuation of the scripts above, and the spaces Qt moves the
+// cursor over, which the list does not hold.
+[[nodiscard]] bool IsSeparatorChar(QChar ch) {
+	return IsWordSeparator(ch)
+		|| IsSegmentableSeparator(ch)
+		|| ch.isSpace();
+}
+
+// Whether the character at 'position' splits words, with an apostrophe that
 // stands inside a word belonging to that word, the way the newest upstream
 // reads it.
 [[nodiscard]] bool IsSeparatorAt(const QString &text, int position) {
@@ -184,13 +193,12 @@ struct Dictionary {
 		|| (unicode == 0x2018)
 		|| (unicode == 0x2019);
 	if (!apostrophe) {
-		return IsWordSeparator(ch) || IsSegmentableSeparator(ch);
+		return IsSeparatorChar(ch);
 	}
 	const auto edge = [&](int index) {
 		return (index < 0)
 			|| (index >= int(text.size()))
-			|| IsWordSeparator(text.at(index))
-			|| IsSegmentableSeparator(text.at(index));
+			|| IsSeparatorChar(text.at(index));
 	};
 	return edge(position - 1) || edge(position + 1);
 }

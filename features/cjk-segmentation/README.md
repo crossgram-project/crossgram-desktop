@@ -19,8 +19,9 @@ all, and a double click on it selects everything to the end of the message.
 `Ui::Text::WordSegment` in `ui/text/text.h` exposes it:
 
 - `IsSeparator` answers the question `IsWordSeparator` answers, with the
-  punctuation of these scripts added and an apostrophe that stands inside a
-  word belonging to that word, the way the newest upstream reads it;
+  punctuation of these scripts and the spaces Qt itself moves the cursor over
+  added, and an apostrophe that stands inside a word belonging to that word,
+  the way the newest upstream reads it;
 - `Start` and `End` bounds the word around a position, which are the words Qt
   cannot see;
 - `MoveForward` and `MoveBackward` move over the text one word at a time;
