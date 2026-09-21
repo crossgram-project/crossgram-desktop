@@ -61,6 +61,15 @@ deliver the queued character through its own character path, combining
 surrogate pairs the way Qt does; see
 [`features/win-unicode-input`](features/win-unicode-input).
 
+Chinese and Japanese text runs its words together, while the separator list
+of the client and Qt's own cursor movement know punctuation alone: a double
+click on such a text selected a whole sentence, and Ctrl+Left/Right jumped
+over one. Patched clients split a run of such characters with a frequency
+dictionary, the same step that the mobile clients of the service get from
+their platform, and treat the punctuation of those scripts the way the
+separator list treats a space; see
+[`features/cjk-segmentation`](features/cjk-segmentation).
+
 Supported upstreams:
 
 - `telegramdesktop/tdesktop`
@@ -185,4 +194,4 @@ yarn check
 yarn build
 ```
 
-The test suite covers structural function matching, CRLF preservation, ambiguous-anchor rejection, and the supported-target registry. Runtime tests require `ffmpeg`, `ffprobe`, and a C++20 compiler (`clang++` by default; override its executable with `CXX`). The accessibility regression compiles and executes the generated cache code instead of relying only on text assertions.
+The test suite covers structural function matching, CRLF preservation, ambiguous-anchor rejection, and the supported-target registry. Runtime tests require `ffmpeg`, `ffprobe`, and a C++20 compiler (`clang++` by default; override its executable with `CXX`). The accessibility regression compiles and executes the generated cache code instead of relying only on text assertions. The CJK segmentation regression compiles and executes the generated dictionary and word boundaries the same way.

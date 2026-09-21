@@ -1,0 +1,25 @@
+		const auto separator = [&](int symbol) {
+			const auto one = view->selectedText(
+				TextSelection(uint16(symbol), uint16(symbol + 1))).rich.text;
+			return one.isEmpty() || Ui::Text::IsWordSeparator(one[0]);
+		};
+		auto symbol = position;
+		if (forward) {
+			while (symbol < maxOffset && separator(symbol)) {
+				++symbol;
+			}
+			while (symbol < maxOffset && !separator(symbol)) {
+				++symbol;
+			}
+		} else {
+			if (symbol > 0) {
+				--symbol;
+			}
+			while (symbol > 0 && separator(symbol)) {
+				--symbol;
+			}
+			while (symbol > 0 && !separator(symbol - 1)) {
+				--symbol;
+			}
+		}
+		wanted = symbol;

@@ -1,0 +1,16 @@
+		} else if (selectType == TextSelectType::Words) {
+			if (!IsWordSeparator(_text, from)) {
+				while (from > 0 && !IsWordSeparator(_text, from - 1)) {
+					--from;
+				}
+			}
+			if (to < _text.size()) {
+				if (IsWordSeparator(_text, to)) {
+					++to;
+				} else {
+					while (to < _text.size() && !IsWordSeparator(_text, to)) {
+						++to;
+					}
+				}
+			}
+		}

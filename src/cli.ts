@@ -12,6 +12,7 @@ import { patchCrossInstanceForward } from "../features/cross-instance-forward/pa
 import { patchRawAnimation } from "../features/raw-animation/patch.js";
 import { patchMergedForward } from "../features/merged-forward/patch.js";
 import { patchAccessibility } from "../features/accessibility/patch.js";
+import { patchCjkSegmentation } from "../features/cjk-segmentation/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
 import { patchRecalled } from "../features/recalled/patch.js";
 import { patchWinUnicodeInput } from "../features/win-unicode-input/patch.js";
@@ -113,6 +114,11 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
     await patchAccessibility({
       root: values.root!,
       target,
+    });
+    await patchCjkSegmentation({
+      root: values.root!,
+      target,
+      featureRoot: resolve(repositoryRoot, "features/cjk-segmentation"),
     });
     await patchWinUnicodeInput({
       root: values.root!,

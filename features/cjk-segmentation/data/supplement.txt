@@ -1,0 +1,371 @@
+# Crossgram word supplement for the CJK dictionary.
+#
+# The base dictionary is a Chinese word list from a news corpus, so everyday
+# messaging, application and internet words are missing from it, and words it
+# does know are often ranked below the single characters they are made of.
+# Every line here is one word, optionally followed by a frequency; a word
+# without a frequency gets 3000, which is the weight of a very common word in
+# the base list. Frequencies are only compared with each other.
+#
+# Words are listed in the same spelling both in simplified and in traditional
+# Chinese where the two differ, because the base list only knows the
+# simplified characters and their runs would otherwise fall apart.
+
+# Messaging
+微信
+朋友圈
+群聊
+群组
+群主
+群成员
+管理员
+好友
+通讯录
+头像
+昵称
+备注
+签名
+拉群
+建群
+退群
+踢人
+禁言
+免打扰
+置顶
+撤回
+拉黑
+屏蔽
+举报
+点赞
+评论
+转发
+分享
+收藏
+表情包
+表情
+贴纸
+红包
+转账
+收款
+付款
+扫码
+二维码
+小程序
+公众号
+订阅号
+视频号
+直播间
+弹幕
+私聊
+消息
+通知
+提醒 8000
+语音
+视频通话
+语音通话
+位置共享
+实时位置
+接龙
+话题
+投票
+已读
+未读
+拉黑名单
+# Traditional Chinese equivalents
+訊息
+通知
+群組
+群組成員 2000
+管理員
+好友
+通訊錄
+頭像
+暱稱
+備註
+簽名
+禁言
+免打擾
+置頂
+收回
+封鎖
+檢舉
+按讚
+留言
+轉發
+分享
+收藏
+貼圖
+表情符號 2000
+紅包
+轉帳
+收款
+付款
+掃碼
+二維碼
+小程式 2000
+公眾號
+訂閱號
+直播間
+彈幕
+私訊
+通知
+提醒
+語音
+視訊通話 2000
+位置分享 2000
+已讀
+未讀
+# Application and system
+安卓
+苹果
+手机
+手机号
+电脑
+平板
+笔记本
+台式机
+屏幕
+分辨率
+键盘
+鼠标
+触屏
+蓝牙
+耳机
+充电
+电量
+充电宝
+数据线
+无线网
+流量
+套餐
+信号
+系统
+版本
+更新
+升级
+安装
+卸载
+下载
+上传
+缓存
+云端
+备份
+恢复
+密码
+验证码
+登录
+注册
+注销
+账号
+用户名
+主页
+代理
+服务器
+运营商
+快捷键
+截图
+录屏
+剪贴板
+输入法
+候选
+拼音
+注音
+繁体
+简体
+词库
+词典
+分词
+断句
+双击
+单击
+三击
+选中
+光标
+选区
+# Traditional Chinese equivalents
+電腦
+平板電腦 2000
+筆記型電腦 2000
+螢幕
+解析度
+鍵盤
+滑鼠
+藍牙
+耳機
+充電
+電量
+行動電源 2000
+傳輸線
+無線網路 2000
+流量
+訊號
+系統
+版本
+更新
+升級
+安裝
+解除安裝 2000
+下載
+上傳
+快取
+雲端
+備份
+還原
+密碼
+驗證碼
+登入
+註冊
+登出
+帳號
+使用者名稱 2000
+伺服器
+電信業者 2000
+快速鍵 2000
+螢幕截圖 2000
+剪貼簿
+輸入法
+候選字 2000
+繁體
+簡體
+詞庫
+詞典
+斷詞
+雙擊
+選取
+游標
+選區
+# Chat, groups and settings
+聊天
+聊天记录
+收藏夹
+文件夹
+文件夹
+会话
+频道
+订阅
+群公告
+群文件
+机器人
+表情符号
+多选
+全选
+复制
+粘贴
+剪切
+撤销
+重做
+刷新
+同步
+静音
+语音消息
+视频消息
+图片消息
+文件传输
+离线
+在线
+隐身
+挂机
+掉线
+重连
+延迟
+# Traditional Chinese equivalents
+聊天記錄 2000
+會話
+頻道
+訂閱
+群組公告 2000
+群組檔案 2000
+機器人
+表情符號 2000
+複製
+貼上
+剪下
+復原
+重做
+重新整理 2000
+同步
+靜音
+語音訊息 2000
+影片訊息 2000
+圖片訊息 2000
+檔案傳輸 2000
+離線
+上線
+重連
+延遲
+# Common internet words
+内卷
+躺平
+破防
+测评
+围脖
+直播
+带货
+主播
+短视频
+自媒体
+弹幕
+二次元
+手办
+攻略
+搬砖
+加班
+打卡
+摸鱼
+养生
+减肥
+健身
+露营
+探店
+打卡
+集赞
+种草
+拔草
+翻车
+爆款
+# Tech and protocols
+协议
+端口
+防火墙
+加密
+解密
+密钥
+证书
+令牌
+接口
+插件
+扩展
+模块
+编译
+调试
+日志
+配置
+参数
+默认
+自定义
+主题
+字体
+字号
+行距
+缩进
+换行
+回车
+空格
+标点
+括号
+引号
+省略号
+破折号
+# Messaging actions
+发送
+接收
+编辑
+删除
+撤回消息
+引用
+回复
+转发到
+合并转发
+消息记录
+置顶消息
+免打扰模式
