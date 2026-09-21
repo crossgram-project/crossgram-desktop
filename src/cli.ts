@@ -14,6 +14,7 @@ import { patchMergedForward } from "../features/merged-forward/patch.js";
 import { patchAccessibility } from "../features/accessibility/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
 import { patchRecalled } from "../features/recalled/patch.js";
+import { patchWinUnicodeInput } from "../features/win-unicode-input/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
 import { resolveFeatures } from "./features.js";
 import { targetById } from "./targets.js";
@@ -112,6 +113,11 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
     await patchAccessibility({
       root: values.root!,
       target,
+    });
+    await patchWinUnicodeInput({
+      root: values.root!,
+      target,
+      featureRoot: resolve(repositoryRoot, "features/win-unicode-input"),
     });
     await patchBranding({
       root: values.root!,

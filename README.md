@@ -50,6 +50,17 @@ row list cached and drop it whenever messages, views, histories, or the
 migrated history change; see [`features/accessibility`](features/accessibility)
 for the invalidation points.
 
+Windows reports text that a program injects with `KEYEVENTF_UNICODE` as a
+`VK_PACKET` key press followed by a `WM_CHAR` carrying the character. Qt's
+Windows key mapper consumes that `WM_CHAR` while handling the key press and
+keeps one key record per virtual key, so an input tool that does not release a
+packet before sending the next one, WeChat voice input for example, makes the
+previous character repeat and the new one disappear. Patched clients drop the
+`VK_PACKET` key press and key release before Qt's mapper sees them, and let Qt
+deliver the queued character through its own character path, combining
+surrogate pairs the way Qt does; see
+[`features/win-unicode-input`](features/win-unicode-input).
+
 Supported upstreams:
 
 - `telegramdesktop/tdesktop`
