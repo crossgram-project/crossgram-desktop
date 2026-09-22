@@ -41,6 +41,13 @@ memory-cached document into an ordered local-file list; if any selected item
 cannot be materialized, the external file payload is suppressed rather than
 sending only part of the selection.
 
+QQ pokes ("戳一戳") are not a Telegram action, so patched clients put one on the menus
+Telegram Desktop already builds around an avatar: clicking a message author's avatar in a
+group sends a single poke, and hovering the arrow sends 1, 5, or 10 at once. The entry only
+exists when the relay answers `crossgram.getFeatures` for that conversation with poke
+support, which keeps it out of official Telegram servers entirely; see
+[`features/poke`](features/poke).
+
 Telegram Desktop exposes every loaded message of a chat as an accessibility
 row and rebuilds that row list, asking every message whether it is hidden, on
 every read. A screen reader reads several properties per row and walks all
