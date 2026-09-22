@@ -310,6 +310,30 @@ describe("desktop CJK word segmentation patch", () => {
 
 		expect(first.field).toContain("void mouseDoubleClickEvent(QMouseEvent *e) override {");
 		expect(first.field).toContain("if (applyWordSegmentDrag(e)) {");
+		// The replaced handler and the new functions have to keep their places:
+		// one inside the handler, the others after it, or the compiler reads
+		// the new functions as local ones of the handler.
+		expect(first.field).toContain([
+			"void InputField::mouseMoveEventInner(QMouseEvent *e) {",
+			"\t_selectedActionQuoteId = lookupActionQuoteId(e->pos());",
+			"\tupdateCursorShape();",
+			"\tif (applyWordSegmentDrag(e)) {",
+			"\t\treturn;",
+			"\t}",
+			"\t_inner->QTextEdit::mouseMoveEvent(e);",
+			"}",
+			"",
+			"// Crossgram: moves the cursor over the words of a text that is written",
+			"// without spaces between its words, which Qt moves over as one word. An event",
+			"// that does not move is left to Qt, the way it would be without this patch.",
+			"bool InputField::handleWordSegmentKey(QKeyEvent *e) {",
+		].join("\n"));
+		expect(first.field).toContain([
+			"\t} else if (handleWordSegmentKey(e)) {",
+			"\t\t// Crossgram: the step by word was taken above.",
+			"\t} else {",
+			"\t\tconst auto text = e->text();",
+		].join("\n"));
 		expect(first.field).toContain("_wordSegmentDrag = std::nullopt;");
 		expect(first.field).toContain("} else if (handleWordSegmentKey(e)) {");
 		expect(first.field).toContain("bool InputField::handleWordSegmentKey(QKeyEvent *e) {");

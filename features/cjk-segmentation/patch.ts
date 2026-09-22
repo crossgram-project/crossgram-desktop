@@ -291,8 +291,8 @@ export async function patchCjkSegmentation(options: PatchOptions): Promise<void>
 			"if (handleWordSegmentKey(e)) {",
 		);
 		file.insertAfterFunction(
-			"void InputField::mouseMoveEventInner(QMouseEvent *e) {",
-			"\n" + fieldWord,
+			"void InputField::mouseMoveEventInner(QMouseEvent *e)",
+			"\n\n" + fieldWord,
 			"InputField::handleWordSegmentKey(QKeyEvent *e)",
 		);
 	});
