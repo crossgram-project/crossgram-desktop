@@ -69,6 +69,17 @@ describe.skipIf(!sourceRoot)("real upstream CJK word segmentation", () => {
 		expect(fieldHeader).toContain("void mouseDoubleClickEventInner(QMouseEvent *e);");
 		expect(fieldHeader).toContain("std::optional<QTextCursor> _wordSegmentDrag;");
 		expect(field).toContain("bool InputField::handleWordSegmentKey(QKeyEvent *e) {");
+		// The new functions have to be definitions of the class at the top of
+		// the file, the way the definitions around them are, and not nested in
+		// the handler they follow.
+		for (const definition of [
+			"bool InputField::handleWordSegmentKey(QKeyEvent *e) {",
+			"void InputField::mouseDoubleClickEventInner(QMouseEvent *e) {",
+			"bool InputField::applyWordSegmentDrag(QMouseEvent *e) {",
+		]) {
+			expect(field.split("\n").some((line) => line.startsWith(definition)))
+				.toBe(true);
+		}
 		expect(field).toContain("bool InputField::applyWordSegmentDrag(QMouseEvent *e) {");
 		expect(field).toContain("} else if (handleWordSegmentKey(e)) {");
 		expect(keyboard).toContain("Ui::Text::WordSegment::MoveForward(window, local)");
