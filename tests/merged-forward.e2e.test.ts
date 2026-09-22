@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -76,6 +78,7 @@ async function patched() {
   const read = (relative: string) => readFile(path.join(root, relative), "utf8");
   return {
     cmake: await read("Telegram/CMakeLists.txt"),
+    core: await read("Telegram/SourceFiles/crossgram/merged_forward_core.h"),
     helper: await read("Telegram/SourceFiles/crossgram/merged_forward.cpp"),
     header: await read("Telegram/SourceFiles/crossgram/merged_forward.h"),
     controller: await read("Telegram/SourceFiles/window/window_session_controller.cpp"),
@@ -84,17 +87,87 @@ async function patched() {
   };
 }
 
+const usernameHarness = `#include "crossgram/merged_forward_core.h"
+
+#include <cstdio>
+#include <string_view>
+
+int main() {
+	using Crossgram::MergedForward::IsSyntheticUsername;
+	struct Case {
+		std::string_view username;
+		bool accepted;
+	};
+	const auto cases = {
+		Case{ "bridgebundle_1", true },
+		Case{ "bridgebundle_42", true },
+		Case{ "bridgechat_7", true },
+		Case{ "BRIDGEBUNDLE_123", true },
+		Case{ "BridgeChat_9", true },
+		Case{ "bridgebundle_007", true },
+		Case{ "bridgebundle_9223372036854775807", true },
+		Case{ "bridgebundle_", false },
+		Case{ "bridgechat_", false },
+		Case{ "bridgebundle_0", false },
+		Case{ "bridgebundle_9223372036854775808", false },
+		Case{ "bridgebundle_1x", false },
+		Case{ "bridgebundle_-1", false },
+		Case{ "bridgebundle_+1", false },
+		Case{ "bridgebundle_1.5", false },
+		Case{ "bridgebundle_1/2", false },
+		Case{ "bridgebundle", false },
+		Case{ "bridgebundlex_1", false },
+		Case{ "bridgefile_1", false },
+		Case{ "user", false },
+		Case{ "", false },
+	};
+	for (const auto &item : cases) {
+		if (IsSyntheticUsername(item.username) != item.accepted) {
+			std::printf(
+				"unexpected result for %.*s\\n",
+				int(item.username.size()),
+				item.username.data());
+			return 1;
+		}
+	}
+	std::printf("all synthetic username cases passed\\n");
+	return 0;
+}
+`;
+
+async function runUsernameHarness(core: string): Promise<string> {
+  const temporaryRoot = path.resolve("../work/tests/merged-forward-unit");
+  await mkdir(temporaryRoot, { recursive: true });
+  const root = await mkdtemp(path.join(temporaryRoot, "fixture-"));
+  roots.push(root);
+  const include = path.join(root, "crossgram");
+  await mkdir(include, { recursive: true });
+  await writeFile(path.join(include, "merged_forward_core.h"), core, "utf8");
+  const cpp = path.join(root, "username-test.cpp");
+  const binary = path.join(root, process.platform === "win32" ? "username-test.exe" : "username-test");
+  await writeFile(cpp, usernameHarness, "utf8");
+  const run = promisify(execFile);
+  await run(process.env.CXX || "clang++", ["-std=c++20", "-O0", "-I", root, cpp, "-o", binary]);
+  return (await run(binary)).stdout;
+}
+
 describe("Desktop merged-forward patch e2e", () => {
   it("installs one shared synthetic-peer registry", async () => {
-    const { cmake, helper, header } = await patched();
+    const { cmake, core, helper, header } = await patched();
     expect(cmake.match(/crossgram\/merged_forward\.cpp/g)).toHaveLength(1);
     expect(cmake.match(/crossgram\/merged_forward\.h/g)).toHaveLength(1);
-    expect(helper).toContain('QStringLiteral("bridgechat_")');
-    expect(helper).toContain("Qt::CaseInsensitive");
-    expect(helper).toContain("!ch.isDigit()");
+    expect(cmake.match(/crossgram\/merged_forward_core\.h/g)).toHaveLength(1);
+    expect(core).toContain('std::string_view("bridgebundle_")');
+    expect(core).toContain('std::string_view("bridgechat_")');
+    expect(helper).toContain("IsSyntheticUsername(std::string_view(");
     expect(helper).toContain("Peers().emplace(peer->id)");
     expect(header).toContain("bool IsUsername(const QString &username)");
   });
+
+  it("accepts every synthetic username shape the relay issues", async () => {
+    const { core } = await patched();
+    expect(await runUsernameHarness(core)).toContain("all synthetic username cases passed");
+  }, 30_000);
 
   it("opens the synthetic basic chat at its message anchor before generic link routing", async () => {
     const { controller } = await patched();

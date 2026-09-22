@@ -70,6 +70,16 @@ their platform, and treat the punctuation of those scripts the way the
 separator list treats a space; see
 [`features/cjk-segmentation`](features/cjk-segmentation).
 
+A QQ merged forward reaches the clients as a synthetic basic chat that the
+relay renders from the archived bundle. Patched clients keep that peer out of
+the chat list: resolving its link marks the peer as a history-only view,
+suppresses the peer-dialog request Telegram Desktop would use to materialize
+it, and drops the chat-list entry the data session creates. The deep link
+anchors at the first message of the transcript, so opening it lands on the
+beginning of the bundle instead of its newest message; legacy
+`bridgechat_...` links stay addressable in the same way. See
+[`features/merged-forward`](features/merged-forward).
+
 Supported upstreams:
 
 - `telegramdesktop/tdesktop`

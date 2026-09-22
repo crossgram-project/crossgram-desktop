@@ -17,12 +17,18 @@ const include = '#include "crossgram/merged_forward.h"';
 export async function patchMergedForward(options: PatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);
   await context.install("merged_forward.h", `${sourceRoot}/crossgram/merged_forward.h`);
+  await context.install(
+    "merged_forward_core.h",
+    `${sourceRoot}/crossgram/merged_forward_core.h`,
+  );
   await context.install("merged_forward.cpp", `${sourceRoot}/crossgram/merged_forward.cpp`);
 
   await context.edit("Telegram/CMakeLists.txt", (file) => {
     file.insertAfter(
       "    mainwidget.cpp",
-      "\n    crossgram/merged_forward.cpp\n    crossgram/merged_forward.h",
+      "\n    crossgram/merged_forward.cpp"
+        + "\n    crossgram/merged_forward.h"
+        + "\n    crossgram/merged_forward_core.h",
       "crossgram/merged_forward.cpp",
     );
   });

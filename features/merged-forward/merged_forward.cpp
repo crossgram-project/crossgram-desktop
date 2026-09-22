@@ -1,5 +1,9 @@
 #include "crossgram/merged_forward.h"
 
+#include "crossgram/merged_forward_core.h"
+
+#include <cstddef>
+
 #include "data/data_peer.h"
 
 namespace Crossgram::MergedForward {
@@ -13,22 +17,10 @@ base::flat_set<PeerId> &Peers() {
 } // namespace
 
 bool IsUsername(const QString &username) {
-	const auto prefix = QStringLiteral("bridgechat_");
-	if (!username.startsWith(prefix, Qt::CaseInsensitive)) {
-		return false;
-	}
-	const auto suffix = username.mid(prefix.size());
-	if (suffix.isEmpty()) {
-		return false;
-	}
-	for (const auto ch : suffix) {
-		if (!ch.isDigit()) {
-			return false;
-		}
-	}
-	auto ok = false;
-	const auto id = suffix.toLongLong(&ok);
-	return ok && id > 0;
+	const auto utf8 = username.toUtf8();
+	return IsSyntheticUsername(std::string_view(
+		utf8.constData(),
+		std::size_t(utf8.size())));
 }
 
 void Mark(PeerData *peer) {
