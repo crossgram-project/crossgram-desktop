@@ -354,6 +354,8 @@ jobs:
           UPSTREAM_TAG: ${{ matrix.build.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
           BRAND_BATCH: ${{ matrix.build.batch }}
+          RUN_NUMBER: ${{ github.run_number }}
+          UPDATE_KEY: ${{ secrets.CROSSGRAM_UPDATE_KEY }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -378,7 +380,8 @@ jobs:
             if [ "$reset" = true ]; then
               git -C "$source" checkout -- "${branding_paths[@]}"
             fi
-            (cd "$patcher" && yarn apply --target "$TARGET" --brand "$brand" --root "$source")
+            (cd "$patcher" && yarn apply --target "$TARGET" --brand "$brand" --root "$source" \
+              --platform linux --build "$RUN_NUMBER" --update-key-file "$UPDATE_KEY_FILE")
             git -C "$source" diff --check
           }
           metadata_for() {
@@ -392,6 +395,13 @@ jobs:
             jq -e . >/dev/null <<<"$json"
             printf '%s\n' "$json"
           }
+
+          UPDATE_KEY_FILE="$RUNNER_TEMP/crossgram-update-key.pem"
+          if [ -z "$UPDATE_KEY" ]; then
+            echo "The CROSSGRAM_UPDATE_KEY secret is required to sign updates" >&2
+            exit 1
+          fi
+          printf '%s' "$UPDATE_KEY" > "$UPDATE_KEY_FILE"
 
           first_metadata="$(metadata_for "${brands[0]}")"
           apply_brand "${brands[0]}" false
@@ -574,7 +584,8 @@ jobs:
               -D CMAKE_CONFIGURATION_TYPES=Release \
               -D "CMAKE_C_FLAGS_RELEASE=$release_optimization -DNDEBUG -DQT_NO_DEBUG" \
               -D "CMAKE_CXX_FLAGS_RELEASE=$release_optimization -DNDEBUG -DQT_NO_DEBUG" \
-              -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
+              -D DESKTOP_APP_DISABLE_AUTOUPDATE=OFF \
+              -D CROSSGRAM_BUILD_UPDATE_PACKER=ON \
               -D "TDESKTOP_API_ID=$effective_id" \
               -D "TDESKTOP_API_HASH=$effective_hash"
 
@@ -618,6 +629,27 @@ jobs:
             test ! -f "$updater" || cp "$updater" "$package/"
             archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$VERSION.tar.xz"
             tar -C "$package" -cJf "$archive" .
+
+            # Pack the signed update payload that the client downloads and installs.
+            crossgram_version=$((100000000 + RUN_NUMBER))
+            payload_work="$GITHUB_WORKSPACE/artifacts/payload-work-$brand"
+            rm -rf "$payload_work"
+            mkdir -p "$payload_work"
+            docker run --rm \
+              -u "$(id -u)" \
+              -w /work \
+              -v "$GITHUB_WORKSPACE:/work" \
+              -v "$source:/usr/src/tdesktop" \
+              crossgram-tdesktop-build \
+              "/usr/src/tdesktop/out/Release/Packer" \
+              -path "/work/artifacts/package" \
+              -version "$crossgram_version"
+            payload_source="$payload_work/tlinuxupd$crossgram_version"
+            if [ ! -f "$payload_source" ]; then
+              echo "Missing $payload_source" >&2
+              exit 1
+            fi
+            mv "$payload_source" "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$crossgram_version.upd"
             symbols_archive="$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$brand-linux-$VERSION.symbols.tar.xz"
             tar -C "$symbols" -cJf "$symbols_archive" .
           done
