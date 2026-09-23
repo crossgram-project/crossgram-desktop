@@ -181,6 +181,7 @@ describe("Desktop merged-forward patch e2e", () => {
     expect(controller).toContain("MTPcrossgram_GetMergedForwardAnchor(");
     expect(controller).toContain("Crossgram::MergedForward::FirstMessageId(");
     expect(controller).toContain("crl::guard(this");
+    expect(controller).toContain('#include "logs.h"');
     expect(controller.match(/showPeerHistory\(peer, params/g)).toHaveLength(2);
     expect(controller).toContain("showPeerHistory(peer, params, info.messageId);");
   });

@@ -48,7 +48,7 @@ export async function patchMergedForward(options: PatchOptions): Promise<void> {
   await context.edit(`${sourceRoot}/window/window_session_controller.cpp`, (file) => {
     file.insertAfter(
       '#include "window/window_session_controller.h"',
-      `\n\n${include}`,
+      `\n\n#include "logs.h"\n${include}`,
       include,
     );
     file.insertAfter(
