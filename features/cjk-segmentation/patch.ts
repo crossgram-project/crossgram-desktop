@@ -170,6 +170,7 @@ export async function patchCjkSegmentation(options: PatchOptions): Promise<void>
 		keyboardWord,
 		keyboardWordOld,
 		keyboardWordNew,
+		fieldKey,
 		fieldWord,
 	] = await Promise.all([
 		context.fragment("words-branch.cpp"),
@@ -178,6 +179,7 @@ export async function patchCjkSegmentation(options: PatchOptions): Promise<void>
 		context.fragment("keyboard-words.cpp"),
 		context.fragment("keyboard-words-old.txt"),
 		context.fragment("keyboard-words-new.txt"),
+		context.fragment("field-key.cpp"),
 		context.fragment("field-words.cpp"),
 	]);
 
@@ -218,8 +220,8 @@ export async function patchCjkSegmentation(options: PatchOptions): Promise<void>
 			"\tbool jumpOutOfBlockByBackspace();",
 			[
 				"",
-				"\t// Crossgram: moves over the words of a text that is written without",
-				"\t// spaces between them, and grows a double click selection by them.",
+				"\t// Crossgram: moves and deletes by words in text without spaces,",
+				"\t// and grows a double click selection by those same words.",
 				"\tbool handleWordSegmentKey(QKeyEvent *e);",
 				"\tbool applyWordSegmentDrag(QMouseEvent *e);",
 			].join("\n"),
@@ -283,17 +285,28 @@ export async function patchCjkSegmentation(options: PatchOptions): Promise<void>
 			].join("\n"),
 			[
 				"\t} else if (handleWordSegmentKey(e)) {",
-				"\t\t// Crossgram: the step by word was taken above.",
+				"\t\t// Crossgram: the word key was handled above.",
 				"\t} else {",
 				"\t\tconst auto text = e->text();",
 				"\t\tauto cursor = textCursor();",
 			].join("\n"),
 			"if (handleWordSegmentKey(e)) {",
 		);
-		file.insertAfterFunction(
-			"void InputField::mouseMoveEventInner(QMouseEvent *e)",
-			"\n\n" + fieldWord,
-			"InputField::handleWordSegmentKey(QKeyEvent *e)",
-		);
+		const keySignature = "bool InputField::handleWordSegmentKey(QKeyEvent *e)";
+		if (file.has(keySignature)) {
+			// Reapplying the patch to an older Crossgram checkout must upgrade
+			// this generated function instead of skipping it as already inserted.
+			file.replaceFunction(
+				keySignature,
+				fieldKey.slice(fieldKey.indexOf(keySignature)).trimEnd(),
+				"const auto deleteForward = (e == QKeySequence::DeleteEndOfWord);",
+			);
+		} else {
+			file.insertAfterFunction(
+				"void InputField::mouseMoveEventInner(QMouseEvent *e)",
+				"\n\n" + fieldKey.trimEnd() + "\n\n" + fieldWord,
+				keySignature,
+			);
+		}
 	});
 }

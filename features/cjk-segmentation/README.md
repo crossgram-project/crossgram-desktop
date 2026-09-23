@@ -43,8 +43,10 @@ what every text selection of the client goes through: a message, a caption, a
 label, a poll, an article of the editor. It replaces the words branch of the
 keyboard selection of the message history, and it adds the same words to
 `Ui::InputField`: Ctrl+Left/Right (Option+Left/Right on macOS, the sequences
-Qt itself uses) move by words, a double click selects one, and the drag that
-follows grows that selection by the words it passes.
+Qt itself uses) move by words; Ctrl+Delete and Ctrl+Backspace delete those
+same words (with an existing selection or a block boundary left to Qt). A
+double click selects one, and the drag that follows grows that selection by
+the words it passes.
 
 ## The dictionary
 
@@ -87,7 +89,10 @@ replaced code, checks idempotence, CRLF preservation and the loud failure of a
 rewritten anchor, checks the dictionary the patcher ships and the bytes it
 packs into the generated source, and compiles the generated word segmentation
 with a harness of the Qt types it uses, where the words of a message, a
-keyboard step and the patched selection of a double click are exercised.
+keyboard step and the patched selection of a double click are exercised. The
+compiled input-field handler is also driven with Windows Ctrl+Delete and
+Ctrl+Backspace shortcuts to check deletion, undo steps, selection fallback,
+read-only fields, mixed scripts and block boundaries.
 
 `tests/cjk-segmentation.e2e.test.ts` runs the same patch against the release
 sources of every supported upstream when

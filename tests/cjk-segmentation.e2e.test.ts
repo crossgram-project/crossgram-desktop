@@ -69,6 +69,10 @@ describe.skipIf(!sourceRoot)("real upstream CJK word segmentation", () => {
 		expect(fieldHeader).toContain("void mouseDoubleClickEventInner(QMouseEvent *e);");
 		expect(fieldHeader).toContain("std::optional<QTextCursor> _wordSegmentDrag;");
 		expect(field).toContain("bool InputField::handleWordSegmentKey(QKeyEvent *e) {");
+		expect(field).toContain("e == QKeySequence::DeleteEndOfWord");
+		expect(field).toContain("e == QKeySequence::DeleteStartOfWord");
+		expect(field).toContain("cursor.removeSelectedText();");
+		expect(field).toContain("cursor.hasSelection() || _inner->isReadOnly()");
 		// The new functions have to be definitions of the class at the top of
 		// the file, the way the definitions around them are, and not nested in
 		// the handler they follow.
@@ -82,6 +86,8 @@ describe.skipIf(!sourceRoot)("real upstream CJK word segmentation", () => {
 		}
 		expect(field).toContain("bool InputField::applyWordSegmentDrag(QMouseEvent *e) {");
 		expect(field).toContain("} else if (handleWordSegmentKey(e)) {");
+		expect(field.indexOf("} else if (handleWordSegmentKey(e)) {"))
+			.toBeLessThan(field.indexOf("_inner->QTextEdit::keyPressEvent(e);"));
 		expect(keyboard).toContain("Ui::Text::WordSegment::MoveForward(window, local)");
 		expect(keyboard).not.toContain("IsWordSeparator(one[0])");
 

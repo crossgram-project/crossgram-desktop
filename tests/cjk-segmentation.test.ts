@@ -283,6 +283,20 @@ function balancedBraces(source: string): boolean {
 	return (source.match(/{/g) ?? []).length === (source.match(/}/g) ?? []).length;
 }
 
+function definition(source: string, signature: string): string {
+	const start = source.indexOf(signature + " {");
+	if (start < 0) throw new Error("Missing function: " + signature);
+	const body = source.indexOf("{", start + signature.length);
+	let depth = 0;
+	for (let index = body; index < source.length; ++index) {
+		if (source[index] === "{") ++depth;
+		else if (source[index] === "}" && --depth === 0) {
+			return source.slice(start, index + 1);
+		}
+	}
+	throw new Error("Unclosed function: " + signature);
+}
+
 describe("desktop CJK word segmentation patch", () => {
 	it("splits the message text selection into words and is idempotent", async () => {
 		const { root, patched } = await fixture();
@@ -323,20 +337,26 @@ describe("desktop CJK word segmentation patch", () => {
 			"\t_inner->QTextEdit::mouseMoveEvent(e);",
 			"}",
 			"",
-			"// Crossgram: moves the cursor over the words of a text that is written",
-			"// without spaces between its words, which Qt moves over as one word. An event",
-			"// that does not move is left to Qt, the way it would be without this patch.",
+			"// Crossgram: moves and deletes by the words of a text that is written",
+			"// without spaces between its words, which Qt treats as one word. A step at a",
+			"// block boundary is left to Qt, so it can cross into the next block.",
 			"bool InputField::handleWordSegmentKey(QKeyEvent *e) {",
 		].join("\n"));
 		expect(first.field).toContain([
 			"\t} else if (handleWordSegmentKey(e)) {",
-			"\t\t// Crossgram: the step by word was taken above.",
+			"\t\t// Crossgram: the word key was handled above.",
 			"\t} else {",
 			"\t\tconst auto text = e->text();",
 		].join("\n"));
 		expect(first.field).toContain("_wordSegmentDrag = std::nullopt;");
 		expect(first.field).toContain("} else if (handleWordSegmentKey(e)) {");
 		expect(first.field).toContain("bool InputField::handleWordSegmentKey(QKeyEvent *e) {");
+		expect(first.field).toContain("e == QKeySequence::DeleteEndOfWord");
+		expect(first.field).toContain("e == QKeySequence::DeleteStartOfWord");
+		expect(first.field).toContain("cursor.hasSelection() || _inner->isReadOnly()");
+		expect(first.field).toContain("cursor.removeSelectedText();");
+		expect(first.field).toContain("cursor.beginEditBlock();");
+		expect(first.field).toContain("cursor.endEditBlock();");
 		expect(first.field).toContain("bool InputField::applyWordSegmentDrag(QMouseEvent *e) {");
 		expect(first.field).toContain("void InputField::mouseDoubleClickEventInner(QMouseEvent *e) {");
 
@@ -360,6 +380,32 @@ describe("desktop CJK word segmentation patch", () => {
 
 		await patchCjkSegmentation(options);
 		expect(await patched()).toEqual(first);
+	});
+
+	it("upgrades a checkout patched before word deletion was added", async () => {
+		const { root, patched } = await fixture();
+		const options = { root, target: targetById("tdesktop"), featureRoot };
+		await patchCjkSegmentation(options);
+		const relative = "Telegram/lib_ui/ui/widgets/fields/input_field.cpp";
+		const sourcePath = path.join(root, relative);
+		const current = await readFile(sourcePath, "utf8");
+		const signature = "bool InputField::handleWordSegmentKey(QKeyEvent *e)";
+		const previous = definition(current, signature);
+		const movementOnly = [
+			"bool InputField::handleWordSegmentKey(QKeyEvent *e) {",
+			"	const auto forward = (e == QKeySequence::MoveToNextWord);",
+			"	return forward;",
+			"}",
+		].join("\n");
+		await writeFile(sourcePath, current.replace(previous, movementOnly), "utf8");
+		await patchCjkSegmentation(options);
+		const upgraded = await readFile(sourcePath, "utf8");
+		expect(definition(upgraded, signature)).toBe(previous);
+		expect(upgraded).toBe(current);
+		expect(upgraded.match(/bool InputField::handleWordSegmentKey/g)).toHaveLength(1);
+		expect((await patched()).field).toContain("QKeySequence::DeleteEndOfWord");
+		await patchCjkSegmentation(options);
+		expect(await readFile(sourcePath, "utf8")).toBe(upgraded);
 	});
 
 	it("patches the shape of the newest upstream", async () => {
@@ -658,10 +704,12 @@ const harnessShim = [
 	"",
 ].join("\n");
 
-it("compiles the word segmentation and selects the words it finds", async () => {
+it("compiles the patched word segmentation and field shortcuts end to end", async () => {
 	const { root, patched } = await fixture();
 	await patchCjkSegmentation({ root, target: targetById("tdesktop"), featureRoot });
 	const sources = await patched();
+	const fieldHandler = definition(
+		sources.field, "bool InputField::handleWordSegmentKey(QKeyEvent *e)");
 
 	// The branch the patch replaced in the message text selection, taken out of
 	// the patched source itself, so that what is exercised is the generated code.
@@ -705,6 +753,9 @@ it("compiles the word segmentation and selects the words it finds", async () => 
 		"#include \"shim.h\"",
 		"",
 		"#include \"ui/text/text_crossgram.inc\"",
+		"#include \"field-shim.h\"",
+		"",
+		...fieldHandler.split("\n"),
 		"",
 		"static int Failures = 0;",
 		"",
@@ -803,6 +854,8 @@ it("compiles the word segmentation and selects the words it finds", async () => 
 			"CHECK(WordSegment::Start(chunked, 64) == 64, \"the character after a chunk starts one\");",
 			"CHECK(WordSegment::End(chunked, 4) == 5, \"a character the list does not join\");",
 			"",
+			"#include \"field-cases.inc\"",
+			"",
 			"if (Failures) {",
 				"std::printf(\"%d checks failed\\n\", Failures);",
 				"return 1;",
@@ -826,6 +879,7 @@ it("compiles the word segmentation and selects the words it finds", async () => 
 		"-Wextra",
 		"-Wno-unused-parameter",
 		"-I", directory,
+		"-I", path.resolve("tests/native/cjk-segmentation"),
 		"-I", path.join(root, "Telegram/lib_ui"),
 		"-I", path.join(root, "Telegram/lib_ui/ui/text"),
 		"main.cpp",
