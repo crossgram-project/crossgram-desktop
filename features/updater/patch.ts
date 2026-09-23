@@ -88,8 +88,8 @@ export function packerKeyPatches(source: string, key: string): TextPatch[] {
 function keyPatches(source: string, declaration: string, key: string): TextPatch[] {
   const pattern = new RegExp("(" + declaration + '")[\\s\\S]*?(";)', "g");
   const matches = [...source.matchAll(pattern)];
-  if (matches.length !== 2) {
-    throw new PatchError("Expected two update keys, found " + matches.length + ".");
+  if (matches.length === 0 || matches.length > 2) {
+    throw new PatchError("Expected one or two update keys, found " + matches.length + ".");
   }
   return matches.map((match) => {
     const declaration = match[1] ?? "";
@@ -98,19 +98,6 @@ function keyPatches(source: string, declaration: string, key: string): TextPatch
     const replacement = marker + "\n" + declaration + key + (match[2] ?? "");
     return { search: match[0], replacement, marker };
   });
-}
-
-/** Every build follows the Crossgram feed of its own brand and platform. */
-export function prefixFunction(prefix: string): string {
-  return [
-    "const QString &readAutoupdatePrefixRaw() {",
-    "\tExpects(!Core::UpdaterDisabled());",
-    "",
-    "\t// Crossgram builds follow the Crossgram release feed of their own",
-    "\t// target, brand and platform instead of the upstream feed.",
-    '\treturn AutoupdatePrefix("' + prefix + '");',
-    "}",
-  ].join("\n");
 }
 
 /** The upstream packer target only exists for special builds. */
@@ -173,6 +160,34 @@ async function installPackerKeys(
   }
 }
 
+/** The upstream forks spell the prefix reader in a few different ways. */
+export const PREFIX_SIGNATURES = [
+  "const QString &readAutoupdatePrefixRaw()",
+  "const QString& readAutoupdatePrefixRaw()",
+  "QString readAutoupdatePrefixRaw()",
+] as const;
+
+export function prefixSignature(source: string): string {
+  const found = PREFIX_SIGNATURES.filter((signature) => source.includes(signature + " {"));
+  if (found.length === 0) {
+    throw new PatchError("Could not find readAutoupdatePrefixRaw in the local storage.");
+  }
+  return found[0] as string;
+}
+
+/** Keep the fork's own return type so the injected body still compiles. */
+export function prefixFunction(prefix: string, signature = PREFIX_SIGNATURES[0]): string {
+  return [
+    signature + " {",
+    "\tExpects(!Core::UpdaterDisabled());",
+    "",
+    "\t// Crossgram builds follow the Crossgram release feed of their own",
+    "\t// target, brand and platform instead of the upstream feed.",
+    '\treturn AutoupdatePrefix("' + prefix + '");',
+    "}",
+  ].join("\n");
+}
+
 export async function patchUpdater(options: UpdaterPatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);
   const pem = await readFile(join(options.featureRoot, "assets", "update-public-key.pem"), "utf8");
@@ -207,9 +222,10 @@ export async function patchUpdater(options: UpdaterPatchOptions): Promise<void> 
     }
   });
   await context.edit(LOCALSTORAGE_ROOT, (file) => {
+    const signature = prefixSignature(file.text());
     file.replaceFunction(
-      "const QString &readAutoupdatePrefixRaw()",
-      prefixFunction(prefix),
+      signature,
+      prefixFunction(prefix, signature),
       'return AutoupdatePrefix("' + prefix + '");',
     );
   });

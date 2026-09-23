@@ -255,3 +255,17 @@ describe("desktop updater e2e", () => {
     expect(storage).not.toContain("ayugram-qq/linux");
   });
 });
+
+describe("desktop updater wiring", () => {
+  it("runs the updater feature from the patcher CLI with its options", async () => {
+    const cli = await readFile("src/cli.ts", "utf8");
+    expect(cli).toContain('import { patchUpdater, type UpdatePlatform } from "../features/updater/patch.js";');
+    expect(cli).toContain("await patchUpdater({");
+    expect(cli).toContain('platform: (values.platform as UpdatePlatform | undefined) ?? null,');
+    expect(cli).toContain("build: values.build ? Number(values.build) : null,");
+    expect(cli).toContain('privateKey: await readPrivateKey(values["update-key-file"]),');
+    expect(cli).toContain('platform: { type: "string" },');
+    expect(cli).toContain('build: { type: "string" },');
+    expect(cli).toContain('"update-key-file": { type: "string" },');
+  });
+});

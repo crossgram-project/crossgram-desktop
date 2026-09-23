@@ -147,6 +147,15 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       brand,
       featureRoot: resolve(repositoryRoot, "features/branding"),
     });
+    await patchUpdater({
+      root: values.root!,
+      target,
+      brand: brand?.id ?? "runtime",
+      platform: (values.platform as UpdatePlatform | undefined) ?? null,
+      build: values.build ? Number(values.build) : null,
+      featureRoot: resolve(repositoryRoot, "features/updater"),
+      privateKey: await readPrivateKey(values["update-key-file"]),
+    });
     if (features.has("e2e")) {
       await patchE2e({
         root: values.root!,
