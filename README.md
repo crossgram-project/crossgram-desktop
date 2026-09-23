@@ -100,6 +100,14 @@ Supported upstreams:
 
 `kotatogram/kotatogram-desktop` is deferred because its latest release is based on a substantially older tdesktop architecture. Supporting it would require maintaining a separate integration path for account startup, UI widgets and layout, and MTProto configuration loading.
 
+Crossgram desktop builds update themselves from the Crossgram release feed. Each
+build carries `AppVersion = 100000000 + <workflow run>` and asks
+`raw.githubusercontent.com/crossgram-project/crossgram-desktop/updates/<target>-<brand>/<platform>/current6`
+where the release pipeline publishes `<version>:<update payload url>`. The payload
+is a normal tdesktop update file signed with the Crossgram update key
+(`CROSSGRAM_UPDATE_KEY`), which the compiled-in public key in `config.h` verifies
+before the staged update replaces the binary on the next start; see
+[`features/updater`](features/updater).
 ## Apply the feature
 
 Node.js 22 or newer and Yarn 4 are required.
