@@ -162,6 +162,8 @@ jobs:
           UPSTREAM_TAG: ${{ matrix.build.tag }}
           UPSTREAM_REPOSITORY: ${{ matrix.build.repository }}
           BRAND_BATCH: ${{ matrix.build.batch }}
+          RUN_NUMBER: ${{ github.run_number }}
+          UPDATE_KEY: ${{ secrets.CROSSGRAM_UPDATE_KEY }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -199,7 +201,7 @@ jobs:
             }
             Push-Location $patcher
             try {
-              & yarn apply --target $env:CROSSGRAM_TARGET --brand $brand --root $source
+              & yarn apply --target $env:CROSSGRAM_TARGET --brand $brand --root $source --platform windows --build $env:RUN_NUMBER --update-key-file $env:CROSSGRAM_UPDATE_KEY_FILE
               if ($LASTEXITCODE -ne 0) { throw "Could not apply brand $brand" }
             } finally {
               Pop-Location
@@ -207,6 +209,11 @@ jobs:
             & git -C $source diff --check
             if ($LASTEXITCODE -ne 0) { throw "Patch validation failed for $brand" }
           }
+
+          $keyFile = Join-Path $env:RUNNER_TEMP 'crossgram-update-key.pem'
+          if (-not $env:UPDATE_KEY) { throw 'The CROSSGRAM_UPDATE_KEY secret is required to sign updates' }
+          [IO.File]::WriteAllText($keyFile, $env:UPDATE_KEY, [Text.UTF8Encoding]::new($false))
+          $env:CROSSGRAM_UPDATE_KEY_FILE = $keyFile
 
           $firstMetadata = Get-BrandMetadata $brands[0]
           Set-Brand $brands[0] $false
@@ -243,7 +250,7 @@ jobs:
             $metadata = Get-BrandMetadata $brand
             Push-Location $telegram
             try {
-              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded' '-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib' '-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FASTLINK /OPT:REF /OPT:ICF' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=ON'
+              & .\configure.bat qt6 '-GNinja Multi-Config' "-DTDESKTOP_API_ID=$effectiveId" "-DTDESKTOP_API_HASH=$effectiveHash" '-DCMAKE_CONFIGURATION_TYPES=Release' '-DCMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG /DQT_NO_DEBUG' '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded' '-DCMAKE_EXE_LINKER_FLAGS=dnsapi.lib' '-DCMAKE_EXE_LINKER_FLAGS_RELEASE=/DEBUG:FASTLINK /OPT:REF /OPT:ICF' '-DDESKTOP_APP_DISABLE_AUTOUPDATE=OFF' '-DCROSSGRAM_BUILD_UPDATE_PACKER=ON'
               if ($LASTEXITCODE -ne 0) { throw "Configure failed for $brand" }
               & cmake --build ..\out --config Release --parallel
               if ($LASTEXITCODE -ne 0) { throw "Build failed for $brand" }
@@ -302,6 +309,33 @@ jobs:
             $symbolNames = @($symbolFiles | ForEach-Object { [IO.Path]::GetFileName($_) })
             & tar.exe -a -cf $symbolsArchivePath -C $symbolsStage @symbolNames
             if ($LASTEXITCODE -ne 0) { throw "Could not create $symbolsArchive" }
+
+            # Pack the signed update payload that the client downloads and installs.
+            $crossgramVersion = 100000000 + [int]$env:RUN_NUMBER
+            $packer = Join-Path $output 'Packer.exe'
+            if (-not (Test-Path -LiteralPath $packer)) { throw 'Missing Packer.exe' }
+            $payloadStage = Join-Path $env:RUNNER_TEMP "crossgram-payload-$brand"
+            if (Test-Path -LiteralPath $payloadStage) {
+              Remove-Item -LiteralPath $payloadStage -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $payloadStage | Out-Null
+            foreach ($file in $files) { Copy-Item -LiteralPath $file -Destination $payloadStage }
+            $payloadWork = Join-Path $env:RUNNER_TEMP "crossgram-payload-work-$brand"
+            if (Test-Path -LiteralPath $payloadWork) {
+              Remove-Item -LiteralPath $payloadWork -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $payloadWork | Out-Null
+            Push-Location $payloadWork
+            try {
+              & $packer -path $payloadStage -version $crossgramVersion -target win64
+              if ($LASTEXITCODE -ne 0) { throw "Packing the update failed for $brand" }
+            } finally {
+              Pop-Location
+            }
+            $payloadName = "crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$crossgramVersion.upd"
+            $payloadSource = Join-Path $payloadWork "tx64upd$crossgramVersion"
+            if (-not (Test-Path -LiteralPath $payloadSource)) { throw "Missing $payloadSource" }
+            Move-Item -LiteralPath $payloadSource -Destination ([IO.Path]::GetFullPath((Join-Path 'artifacts' $payloadName)))
           }
           $releaseMetadata = [ordered]@{
             target = $env:CROSSGRAM_TARGET
@@ -792,6 +826,11 @@ jobs:
     needs: [plan, build]
     runs-on: ubuntu-latest
     steps:
+      - name: Check out patcher
+        uses: actions/checkout@v7
+        with:
+          path: patcher
+
       - name: Download successful platform builds
         continue-on-error: true
         uses: actions/download-artifact@v8
@@ -832,6 +871,9 @@ jobs:
               echo "Skipping incomplete package without matching symbols: $package" >&2
             fi
           done < <(find artifacts -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.xz' \) -print | sort)
+          while IFS= read -r payload; do
+            files+=("$payload")
+          done < <(find artifacts -maxdepth 1 -type f -name '*.upd' -print | sort)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No complete package and symbol pairs; skipping release."
             exit 0
@@ -858,3 +900,72 @@ jobs:
               --title "$release_name" \
               --notes-file release-notes.md
           fi
+
+      - name: Publish the Crossgram update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          mapfile -t payloads < <(find artifacts -maxdepth 1 -type f -name '*.upd' -print | sort)
+          if [ "${#payloads[@]}" -eq 0 ]; then
+            echo "No update payloads were produced; skipping the feed."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import hashlib, os, pathlib, re, subprocess, tempfile
+
+          repository = os.environ["GH_REPO"]
+          run = os.environ["RUN_NUMBER"]
+          tag = "crossgram-" + run
+          public_key = pathlib.Path("patcher/features/updater/assets/update-public-key.pem")
+          pattern = re.compile(
+              r"^crossgram-(?P<target>.+)-(?P<brand>runtime|cross|qq|wechat|wecom|dingtalk|discord)"
+              r"-(?P<platform>windows|linux|macos)-(?P<version>\d+)\.upd$"
+          )
+          versions = ["current", "current2", "current3", "current6"]
+          written = 0
+          with tempfile.TemporaryDirectory() as scratch:
+              for payload in sorted(pathlib.Path("artifacts").glob("*.upd")):
+                  match = pattern.match(payload.name)
+                  if not match:
+                      raise SystemExit(f"unexpected payload name: {payload.name}")
+                  blob = payload.read_bytes()
+                  if len(blob) <= 148:
+                      raise SystemExit(f"payload {payload.name} is too small to carry a header")
+                  signature, digest, body = blob[:128], blob[128:148], blob[148:]
+                  if hashlib.sha1(body).digest() != digest:
+                      raise SystemExit(f"payload {payload.name} has a broken SHA1 header")
+                  signature_file = pathlib.Path(scratch) / "signature.bin"
+                  body_file = pathlib.Path(scratch) / "body.bin"
+                  signature_file.write_bytes(signature)
+                  body_file.write_bytes(body)
+                  subprocess.run(
+                      ["openssl", "dgst", "-sha1", "-verify", str(public_key),
+                       "-signature", str(signature_file), str(body_file)],
+                      check=True,
+                      stdout=subprocess.DEVNULL,
+                  )
+                  url = (f"https://github.com/{repository}/releases/download/{tag}/{payload.name}")
+                  directory = pathlib.Path("feed") / (match["target"] + "-" + match["brand"]) / match["platform"]
+                  directory.mkdir(parents=True, exist_ok=True)
+                  for name in versions:
+                      (directory / name).write_text(f"{match['version']}:{url}\n", encoding="utf-8")
+                  written += 1
+                  print(f"feed: {match['target']}/{match['brand']}/{match['platform']} -> {match['version']}")
+          print(f"verified {written} payload(s)")
+          PY
+
+          cd feed
+          git init -q .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+          if git fetch -q --depth 1 origin updates; then
+            git checkout -q -B updates FETCH_HEAD
+          else
+            git checkout -q --orphan updates
+          fi
+          git add -A
+          git -c user.email=crossgram@users.noreply.github.com -c user.name=Crossgram \
+            commit -q -m "updates: feed for crossgram-${RUN_NUMBER}"
+          git push -q origin HEAD:updates
+          echo "Published the update feed for crossgram-${RUN_NUMBER}."

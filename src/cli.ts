@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { appendFile } from "node:fs/promises";
+import { appendFile, readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,7 @@ import { patchCjkSegmentation } from "../features/cjk-segmentation/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
 import { patchRecalled } from "../features/recalled/patch.js";
 import { patchWinUnicodeInput } from "../features/win-unicode-input/patch.js";
+import { patchUpdater, type UpdatePlatform } from "../features/updater/patch.js";
 import { brandById, resolveBrand } from "./brands.js";
 import { resolveFeatures } from "./features.js";
 import { targetById } from "./targets.js";
@@ -29,12 +30,21 @@ const { positionals, values } = parseArgs({
     brand: { type: "string", short: "b", default: "runtime" },
     feature: { type: "string", multiple: true, default: [] },
     "github-output": { type: "boolean", default: false },
+    platform: { type: "string" },
+    build: { type: "string" },
+    "update-key-file": { type: "string" },
   },
 });
 
+async function readPrivateKey(file: string | undefined): Promise<string | null> {
+  const path = file ?? process.env.CROSSGRAM_UPDATE_PRIVATE_KEY_FILE;
+  if (!path) return null;
+  return await readFile(path, "utf8");
+}
+
 const command = positionals[0];
 if (!values.target || (command === "patch" && !values.root) || !["patch", "metadata"].includes(command ?? "")) {
-  console.error("Usage: yarn apply --target <id> --brand <id|runtime> --root <tdesktop checkout> [--feature e2e]");
+  console.error("Usage: yarn apply --target <id> --brand <id|runtime> --root <tdesktop checkout> [--feature e2e] [--platform windows|linux|macos --build <run-number>]");
   console.error("       yarn metadata --target <id> --brand <id>");
   process.exitCode = 2;
 } else {

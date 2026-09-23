@@ -155,11 +155,17 @@ jobs:
           TARGET: ${{ matrix.build.target }}
           BRAND: ${{ matrix.build.brand }}
         run: |
-          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source"
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" \
+            --platform linux --build 1
           git -C "$GITHUB_WORKSPACE/source" add --intent-to-add .
           git -C "$GITHUB_WORKSPACE/source" diff --check
+          # The updater feature has to leave a real feed and packer behind.
+          grep -Fq 'return AutoupdatePrefix("https://raw.githubusercontent.com/crossgram-project/crossgram-desktop/updates/' "$GITHUB_WORKSPACE/source/Telegram/SourceFiles/storage/localstorage.cpp"
+          grep -Fq 'CROSSGRAM_BUILD_UPDATE_PACKER' "$GITHUB_WORKSPACE/source/Telegram/CMakeLists.txt"
+          grep -Fq 'constexpr auto AppVersion = 100000001;' "$GITHUB_WORKSPACE/source/Telegram/SourceFiles/core/version.h"
           before="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
-          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source"
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" \
+            --platform linux --build 1
           after="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
           test "$before" = "$after"
 
@@ -204,11 +210,13 @@ jobs:
           TARGET: ${{ matrix.build.target }}
           BRAND: ${{ matrix.build.brand }}
         run: |
-          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" --feature e2e
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" \
+            --platform linux --build 1 --feature e2e
           git -C "$GITHUB_WORKSPACE/source" add --intent-to-add .
           git -C "$GITHUB_WORKSPACE/source" diff --check
           grep -Fq 'Crossgram::E2e::Start();' "$GITHUB_WORKSPACE/source/Telegram/SourceFiles/core/application.cpp"
           before="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
-          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" --feature e2e
+          yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" \
+            --platform linux --build 1 --feature e2e
           after="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
           test "$before" = "$after"

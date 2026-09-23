@@ -99,12 +99,12 @@ describe("poke desktop patch", () => {
     expect(first["Telegram/SourceFiles/codegen/scheme/codegen_scheme.py"]).toContain(
       "    'crossgram.sendPoke#9a2d47f0',",
     );
-    const menu = first["Telegram/SourceFiles/window/window_peer_menu.cpp"];
+    const menu = first["Telegram/SourceFiles/window/window_peer_menu.cpp"] ?? "";
     expect(menu).toContain('#include "crossgram/poke.h"');
     expect(menu).toContain("\tCrossgram::Poke::AddMenuAction(\n\t\tcontroller,\n\t\tpeer,\n\t\tgroupPeer ? groupPeer : peer.get(),\n\t\taddAction);");
     expect(menu.match(/Crossgram::Poke::AddMenuAction\(_controller, _peer, _peer, _addAction\);/g) ?? [])
       .toHaveLength(2);
-    const controller = first["Telegram/SourceFiles/window/window_session_controller.cpp"];
+    const controller = first["Telegram/SourceFiles/window/window_session_controller.cpp"] ?? "";
     expect(controller).toContain("\tCrossgram::Poke::Warm(&peer->session(), peer);");
     expect(await readFile(path.join(root, "Telegram/SourceFiles/crossgram/poke.cpp"), "utf8"))
       .toContain("MTPcrossgram_SendPoke(");

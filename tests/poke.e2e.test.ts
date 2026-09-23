@@ -56,8 +56,8 @@ describe.skipIf(!sourceRoot)("real upstream poke menus", () => {
     const patched = await Promise.all(relativePaths.map((relative) => read(relative)));
     const schema = patched[1];
     const codegen = patched[2];
-    const menu = patched[3];
-    const controller = patched[4];
+    const menu = patched[3] ?? "";
+    const controller = patched[4] ?? "";
 
     expect(schema).toContain("crossgram.getFeatures#c3e6b915 peer:InputPeer = DataJSON;");
     expect(schema).toContain("crossgram.sendPoke#9a2d47f0 peer:InputPeer user_id:InputUser count:int = Bool;");
@@ -82,7 +82,7 @@ describe.skipIf(!sourceRoot)("real upstream poke menus", () => {
 
     for (const [index, relative] of relativePaths.entries()) {
       if (!relative.endsWith(".cpp")) continue;
-      expect(braceDelta(patched[index]), relative).toBe(braceDelta(original[index]));
+      expect(braceDelta(patched[index] ?? ""), relative).toBe(braceDelta(original[index] ?? ""));
     }
 
     const before = [...patched];
