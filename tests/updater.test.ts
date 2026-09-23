@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   CONFIG_ROOT,
+  alphaKeyHeader as alphaKeyHeaderForTest,
+  keyHeader,
   CMAKE_ROOT,
   LOCALSTORAGE_ROOT,
   PACKER_ROOT,
@@ -52,6 +54,7 @@ const packerSource = [
   "",
   "extern const char *PrivateKey;",
   "extern const char *PrivateBetaKey;",
+  "static const char *AlphaPrivateKey = \"\";",
   '#include "../../../../DesktopPrivate/packer_private.h" // RSA PRIVATE KEYS for update signing',
   '#include "../../../../DesktopPrivate/alpha_private.h" // private key for alpha version file generation',
   "",
@@ -267,5 +270,58 @@ describe("desktop updater wiring", () => {
     expect(cli).toContain('platform: { type: "string" },');
     expect(cli).toContain('build: { type: "string" },');
     expect(cli).toContain('"update-key-file": { type: "string" },');
+  });
+});
+
+describe("packer private key headers", () => {
+  const privateKey = "-----BEGIN RSA PRIVATE KEY-----\nPRIVATE\n-----END RSA PRIVATE KEY-----\n";
+
+  it("defines every identifier the packer of a fork references", () => {
+    const shapes: Array<{ name: string; source: string; withAlpha: boolean; separateAlphaHeader: boolean }> = [
+      {
+        name: "ayugram",
+        source: [
+          "extern const char *PrivateKey;",
+          "extern const char *PrivateBetaKey;",
+          '#include "packer_private.h" // RSA PRIVATE KEYS for update signing',
+          "QByteArray cAlphaPrivateKey(AlphaPrivateKey);",
+        ].join("\n"),
+        withAlpha: true,
+        separateAlphaHeader: false,
+      },
+      {
+        name: "telegram-desktop",
+        source: [
+          "extern const char *PrivateKey;",
+          "extern const char *PrivateBetaKey;",
+          '#include "../../../../DesktopPrivate/packer_private.h"',
+          '#include "../../../../DesktopPrivate/alpha_private.h"',
+        ].join("\n"),
+        withAlpha: false,
+        separateAlphaHeader: true,
+      },
+      {
+        name: "materialgram",
+        source: [
+          "extern const char *PrivateKey;",
+          '#include "../../../../DesktopPrivate/packer_private.h"',
+        ].join("\n"),
+        withAlpha: false,
+        separateAlphaHeader: false,
+      },
+    ];
+    for (const shape of shapes) {
+      const header = keyHeader(privateKey, shape.withAlpha);
+      expect(header, shape.name).toContain("const char *PrivateKey = ");
+      expect(header, shape.name).toContain("const char *PrivateBetaKey = PrivateKey;");
+      expect(header.includes("AlphaPrivateKey"), shape.name).toBe(shape.withAlpha);
+      const needsAlpha = shape.source.includes("AlphaPrivateKey(") && !shape.source.includes("alpha_private.h");
+      expect(header.includes("AlphaPrivateKey"), shape.name + " needs the alpha key").toBe(needsAlpha);
+      if (shape.withAlpha) {
+        const alpha = alphaKeyHeaderForTest();
+        expect(alpha).toContain('AlphaPrivateKey = ""');
+      }
+      expect(header).toContain(cppKeyLiteral(privateKey).slice(0, 20));
+    }
   });
 });
