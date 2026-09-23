@@ -2,9 +2,6 @@
 
 #include "crossgram/merged_forward_core.h"
 
-#include <QtCore/QJsonDocument>
-#include <QtCore/QJsonObject>
-
 #include <cstddef>
 
 #include "data/data_peer.h"
@@ -25,15 +22,6 @@ bool IsUsername(const QString &username) {
 	return IsSyntheticUsername(std::string_view(
 		utf8.constData(),
 		std::size_t(utf8.size())));
-}
-
-MsgId FirstMessageId(const QByteArray &json, MsgId fallback) {
-	const auto document = QJsonDocument::fromJson(json);
-	if (!document.isObject()) {
-		return fallback;
-	}
-	const auto id = document.object().value(u"messageId"_q).toInt();
-	return (id > 0) ? MsgId(id) : fallback;
 }
 
 void Mark(PeerData *peer) {

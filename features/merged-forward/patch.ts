@@ -33,22 +33,10 @@ export async function patchMergedForward(options: PatchOptions): Promise<void> {
     );
   });
 
-  // The desktop client asks the relay which message a synthetic transcript
-  // starts with, because the deep link stored in its local storage may still
-  // anchor at the newest message of the bundle.  The constructor id matches
-  // CROSSGRAM_API_SCHEMA in the relay's mtproto package.
-  await context.edit(`${sourceRoot}/mtproto/scheme/api.tl`, (file) => {
-    file.insertAfter(
-      "upload.getFile#be5335be flags:# precise:flags.0?true cdn_supported:flags.1?true location:InputFileLocation offset:long limit:int = upload.File;",
-      "\ncrossgram.getMergedForwardAnchor#f4a571c7 peer:InputPeer = DataJSON;",
-      "crossgram.getMergedForwardAnchor#f4a571c7",
-    );
-  });
-
   await context.edit(`${sourceRoot}/window/window_session_controller.cpp`, (file) => {
     file.insertAfter(
       '#include "window/window_session_controller.h"',
-      `\n\n#include "logs.h"\n${include}`,
+      `\n\n#include "logs.h"\n#include "data/data_types.h"\n${include}`,
       include,
     );
     file.insertAfter(
@@ -66,18 +54,37 @@ export async function patchMergedForward(options: PatchOptions): Promise<void> {
 \t\t\t\tinfo.clickFromMessageId
 \t\t\t};
 \t\t\tparams.highlight.pollOption = info.pollOption;
-\t\t\t// The relay answers with the message a synthetic transcript starts
-\t\t\t// with; the link anchor is only the fallback for older relays.
-\t\t\t_api.request(MTPcrossgram_GetMergedForwardAnchor(
-\t\t\t\tpeer->input()
-\t\t\t)).done(crl::guard(this, [=](const MTPDataJSON &result) {
-\t\t\t\tshowPeerHistory(peer, params, result.match([&](const MTPDdataJSON &data) {
-\t\t\t\t\treturn Crossgram::MergedForward::FirstMessageId(
-\t\t\t\t\t\tdata.vdata().v,
-\t\t\t\t\t\tinfo.messageId);
-\t\t\t\t}));
+\t\t\t// The relay answers a history request anchored at the documented
+\t\t\t// sentinel with the beginning of the transcript; the link anchor stays
+\t\t\t// the fallback for older relays.
+\t\t\t_api.request(MTPmessages_GetHistory(
+\t\t\t\tpeer->input(),
+\t\t\t\tMTP_int(Crossgram::MergedForward::kFirstMessageOffsetId),
+\t\t\t\tMTP_int(0),
+\t\t\t\tMTP_int(0),
+\t\t\t\tMTP_int(1),
+\t\t\t\tMTP_int(0),
+\t\t\t\tMTP_int(0),
+\t\t\t\tMTP_long(0)
+\t\t\t)).done(crl::guard(this, [=](const MTPmessages_Messages &result) {
+\t\t\t\tconst auto list = result.match([&](
+\t\t\t\t\t\tconst MTPDmessages_messages &data) {
+\t\t\t\t\treturn &data.vmessages().v;
+\t\t\t\t}, [&](const MTPDmessages_messagesSlice &data) {
+\t\t\t\t\treturn &data.vmessages().v;
+\t\t\t\t}, [&](const MTPDmessages_channelMessages &data) {
+\t\t\t\t\treturn &data.vmessages().v;
+\t\t\t\t}, [&](const MTPDmessages_messagesNotModified &) {
+\t\t\t\t\treturn (const QVector<MTPMessage>*)nullptr;
+\t\t\t\t});
+\t\t\t\tshowPeerHistory(
+\t\t\t\t\tpeer,
+\t\t\t\t\tparams,
+\t\t\t\t\t(list && !list->isEmpty())
+\t\t\t\t\t\t? IdFromMessage(list->front())
+\t\t\t\t\t\t: info.messageId);
 \t\t\t})).fail(crl::guard(this, [=](const MTP::Error &error) {
-\t\t\t\tLOG(("Crossgram merged-forward anchor lookup failed: %1"
+\t\t\t\tLOG(("Crossgram transcript start lookup failed: %1"
 \t\t\t\t\t).arg(error.type()));
 \t\t\t\tshowPeerHistory(peer, params, info.messageId);
 \t\t\t})).send();

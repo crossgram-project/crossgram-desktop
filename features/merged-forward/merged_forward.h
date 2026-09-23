@@ -1,9 +1,5 @@
 #pragma once
 
-#include "data/data_msg_id.h"
-
-#include <QtCore/QByteArray>
-
 class PeerData;
 class QString;
 
@@ -13,11 +9,9 @@ namespace Crossgram::MergedForward {
 void Mark(PeerData *peer);
 [[nodiscard]] bool IsPeer(const PeerData *peer);
 
-/**
- * Message id the relay reports for the beginning of a synthetic merged-forward
- * transcript. A relay that cannot answer, or a malformed answer, keeps
- * `fallback` so the deep link anchor stays usable.
- */
-[[nodiscard]] MsgId FirstMessageId(const QByteArray &json, MsgId fallback);
+// Synthetic chats address messages by hashed ids, so a history request
+// anchored at id 1 cannot collide with a message of the bundle. The relay
+// answers it with the oldest page of the transcript.
+inline constexpr auto kFirstMessageOffsetId = 1;
 
 } // namespace Crossgram::MergedForward

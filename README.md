@@ -84,10 +84,11 @@ suppresses the peer-dialog request Telegram Desktop would use to materialize
 it, and drops the chat-list entry the data session creates. The deep link
 anchors at the first message of the transcript, so opening it lands on the
 beginning of the bundle instead of its newest message. The client also asks the
-relay which message the transcript starts with (`crossgram.getMergedForwardAnchor`)
-once the peer resolves, so a card whose content was cached before the relay
-changed the anchor still opens at the beginning; the link anchor stays the
-fallback, and legacy `bridgechat_...` links keep working the same way. See
+relay for the beginning at open time (a history request anchored at the offset
+id 1 sentinel, which synthetic hashed ids never take), so a card whose content
+was cached before the relay changed the anchor still opens at the beginning;
+the link anchor stays the fallback, and legacy `bridgechat_...` links keep
+working the same way. See
 [`features/merged-forward`](features/merged-forward).
 
 Supported upstreams:

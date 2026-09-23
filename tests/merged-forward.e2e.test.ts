@@ -22,7 +22,6 @@ async function fixture(): Promise<string> {
   await Promise.all([
     mkdir(path.join(source, "window"), { recursive: true }),
     mkdir(path.join(source, "data"), { recursive: true }),
-    mkdir(path.join(source, "mtproto", "scheme"), { recursive: true }),
   ]);
   await writeFile(path.join(root, "Telegram", "CMakeLists.txt"), `set(SOURCES
     mainwidget.cpp
@@ -43,10 +42,6 @@ void SessionNavigation::showPeerByLink(const PeerByLinkInfo &info) {
 	}
 }
 `, "utf8");
-  await writeFile(path.join(source, "mtproto", "scheme", "api.tl"), `---functions---
-upload.getFile#be5335be flags:# precise:flags.0?true cdn_supported:flags.1?true location:InputFileLocation offset:long limit:int = upload.File;
-`, "utf8");
-
   await writeFile(path.join(source, "data", "data_histories.cpp"), `#include "data/data_histories.h"
 
 void Histories::requestDialogEntry(
@@ -82,7 +77,6 @@ async function patched() {
   await patchMergedForward(options);
   const read = (relative: string) => readFile(path.join(root, relative), "utf8");
   return {
-    api: await read("Telegram/SourceFiles/mtproto/scheme/api.tl"),
     cmake: await read("Telegram/CMakeLists.txt"),
     core: await read("Telegram/SourceFiles/crossgram/merged_forward_core.h"),
     helper: await read("Telegram/SourceFiles/crossgram/merged_forward.cpp"),
@@ -176,24 +170,18 @@ describe("Desktop merged-forward patch e2e", () => {
   }, 30_000);
 
   it("asks the relay for the transcript start and keeps the link anchor as fallback", async () => {
-    const { api, controller } = await patched();
-    expect(api.match(/crossgram\.getMergedForwardAnchor#f4a571c7/g)).toHaveLength(1);
-    expect(controller).toContain("MTPcrossgram_GetMergedForwardAnchor(");
-    expect(controller).toContain("Crossgram::MergedForward::FirstMessageId(");
+    const { controller, header } = await patched();
+    expect(controller).toContain("MTPmessages_GetHistory(");
+    expect(controller).toContain("Crossgram::MergedForward::kFirstMessageOffsetId");
+    expect(controller).toContain("MTPDmessages_messagesSlice &data");
+    expect(controller).toContain("return &data.vmessages().v;");
+    expect(controller).toContain("? IdFromMessage(list->front())");
     expect(controller).toContain("crl::guard(this");
-    expect(controller).toContain('#include "logs.h"');
-    expect(controller.match(/showPeerHistory\(peer, params/g)).toHaveLength(2);
+    expect(controller).toContain('#include "data/data_types.h"');
+    expect(controller.match(/showPeerHistory\(/g)!.length).toBeGreaterThanOrEqual(2);
     expect(controller).toContain("showPeerHistory(peer, params, info.messageId);");
+    expect(header).toContain("inline constexpr auto kFirstMessageOffsetId = 1;");
   });
-
-  it("parses the relay answer in the shared helper", async () => {
-    const { header, helper } = await patched();
-    expect(header).toContain("MsgId FirstMessageId(const QByteArray &json, MsgId fallback)");
-    expect(helper).toContain("QJsonDocument::fromJson(json)");
-    expect(helper).toContain('u"messageId"_q');
-    expect(helper).toContain("return (id > 0) ? MsgId(id) : fallback;");
-  });
-
   it("opens the synthetic basic chat at its message anchor before generic link routing", async () => {
     const { controller } = await patched();
     expect(controller).toContain("Crossgram::MergedForward::IsUsername(*name)");
