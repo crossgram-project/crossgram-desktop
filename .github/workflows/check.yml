@@ -155,17 +155,21 @@ jobs:
           TARGET: ${{ matrix.build.target }}
           BRAND: ${{ matrix.build.brand }}
         run: |
+          printf '%s\n' '-----BEGIN RSA PRIVATE KEY-----' 'CHECK' '-----END RSA PRIVATE KEY-----' > "$RUNNER_TEMP/update-key.pem"
           yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" \
-            --platform linux --build 1
+            --platform linux --build 1 --update-key-file "$RUNNER_TEMP/update-key.pem"
           git -C "$GITHUB_WORKSPACE/source" add --intent-to-add .
           git -C "$GITHUB_WORKSPACE/source" diff --check
           # The updater feature has to leave a real feed and packer behind.
           grep -Fq 'return AutoupdatePrefix("https://raw.githubusercontent.com/crossgram-project/crossgram-desktop/updates/' "$GITHUB_WORKSPACE/source/Telegram/SourceFiles/storage/localstorage.cpp"
           grep -Fq 'CROSSGRAM_BUILD_UPDATE_PACKER' "$GITHUB_WORKSPACE/source/Telegram/CMakeLists.txt"
           grep -Fq 'constexpr auto AppVersion = 100000001;' "$GITHUB_WORKSPACE/source/Telegram/SourceFiles/core/version.h"
+          # The packer key header must be written for every packer shape.
+          grep -rFq 'CHECK' "$GITHUB_WORKSPACE/source/Telegram/SourceFiles/_other/packer_private.h" \
+            || grep -rFq 'CHECK' "$GITHUB_WORKSPACE/DesktopPrivate/packer_private.h"
           before="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
           yarn apply --target "$TARGET" --brand "$BRAND" --root "$GITHUB_WORKSPACE/source" \
-            --platform linux --build 1
+            --platform linux --build 1 --update-key-file "$RUNNER_TEMP/update-key.pem"
           after="$(git -C "$GITHUB_WORKSPACE/source" diff --binary --no-ext-diff HEAD | sha256sum)"
           test "$before" = "$after"
 
