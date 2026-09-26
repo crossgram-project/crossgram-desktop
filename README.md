@@ -48,13 +48,6 @@ exists when the relay answers `crossgram.getFeatures` for that conversation with
 support, which keeps it out of official Telegram servers entirely; see
 [`features/poke`](features/poke).
 
-QQ has no message reactions in one-to-one chats, but the relay advertises the
-reaction catalog account-wide and Telegram Desktop answers `All` for every user.
-Patched clients ask `crossgram.getFeatures` for a chat when it is opened and fold
-a refusal into the peer's allowed reactions, so the reaction button, selector and
-menu entry stay out of those chats while every server without the Crossgram API
-keeps its own rules; see [`features/reactions`](features/reactions).
-
 Telegram Desktop exposes every loaded message of a chat as an accessibility
 row and rebuilds that row list, asking every message whether it is hidden, on
 every read. A screen reader reads several properties per row and walks all

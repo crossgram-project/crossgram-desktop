@@ -12,7 +12,6 @@ import { patchCrossInstanceForward } from "../features/cross-instance-forward/pa
 import { patchRawAnimation } from "../features/raw-animation/patch.js";
 import { patchMergedForward } from "../features/merged-forward/patch.js";
 import { patchPoke } from "../features/poke/patch.js";
-import { patchReactions } from "../features/reactions/patch.js";
 import { patchAccessibility } from "../features/accessibility/patch.js";
 import { patchCjkSegmentation } from "../features/cjk-segmentation/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
@@ -122,11 +121,6 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       root: values.root!,
       target,
       featureRoot: resolve(repositoryRoot, "features/poke"),
-    });
-    await patchReactions({
-      root: values.root!,
-      target,
-      featureRoot: resolve(repositoryRoot, "features/reactions"),
     });
     await patchMergedForward({
       root: values.root!,
