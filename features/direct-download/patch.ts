@@ -138,6 +138,14 @@ mtpRequestId DownloadMtprotoTask::sendDirectRequest(const RequestData &requestDa
 		crl::on_main(this, [=] {
 			fallbackDirectRequests(u"http_resume_moved_backwards"_q);
 		});
+	} else {
+		// The shared transfer may already hold this part, or may have finished.
+		// Parts are otherwise only delivered from readyRead/finished, which never
+		// fire again once the reply is done, so a streaming player that asks for
+		// a later part after the file finished downloading would wait forever.
+		crl::on_main(this, [=] {
+			deliverDirectParts();
+		});
 	}
 	return id;
 }
@@ -318,6 +326,31 @@ void DownloadMtprotoTask::fallbackDirectRequests(const QString &reason) {
 	}
 }`,
       "QString DownloadMtprotoTask::crossgramDownloadTransport() const",
+    );
+    file.replace(
+      `	} else if (requestData.offset < _directBaseOffset) {
+		crl::on_main(this, [=] {
+			fallbackDirectRequests(u"http_resume_moved_backwards"_q);
+		});
+	}
+	return id;
+}`,
+      `	} else if (requestData.offset < _directBaseOffset) {
+		crl::on_main(this, [=] {
+			fallbackDirectRequests(u"http_resume_moved_backwards"_q);
+		});
+	} else {
+		// The shared transfer may already hold this part, or may have finished.
+		// Parts are otherwise only delivered from readyRead/finished, which never
+		// fire again once the reply is done, so a streaming player that asks for
+		// a later part after the file finished downloading would wait forever.
+		crl::on_main(this, [=] {
+			deliverDirectParts();
+		});
+	}
+	return id;
+}`,
+      "Parts are otherwise only delivered from readyRead/finished",
     );
     file.replace(
       `QString DownloadMtprotoTask::crossgramDownloadTransport() const {

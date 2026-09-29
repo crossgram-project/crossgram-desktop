@@ -199,6 +199,50 @@ describe("Desktop direct-download patch e2e", () => {
     expect(helper).not.toContain("supportsRange");
   });
 
+  it("serves parts requested after the shared transfer already finished", async () => {
+    const { implementation } = await patchedFixture();
+    const start = implementation.indexOf(
+      "mtpRequestId DownloadMtprotoTask::sendDirectRequest(const RequestData &requestData) {",
+    );
+    const end = implementation.indexOf("void DownloadMtprotoTask::directUrlResolved(", start);
+    const body = implementation.slice(start, end);
+    // Streaming video asks for later parts on demand. Once the single HTTP
+    // transfer has completed, readyRead/finished never fire again, so the
+    // request path itself has to hand out cached parts.
+    const moved = body.indexOf("} else if (requestData.offset < _directBaseOffset) {");
+    const deliver = body.indexOf("deliverDirectParts();", moved);
+    expect(moved).toBeGreaterThan(0);
+    expect(deliver).toBeGreaterThan(moved);
+    expect(body.slice(moved, deliver)).toContain("} else {");
+    expect(body.slice(moved, deliver)).toContain("crl::on_main(this, [=] {");
+    expect(body.match(/deliverDirectParts\(\);/g)).toHaveLength(1);
+  });
+
+  it("adds late-part delivery when reapplied over a tree patched without it", async () => {
+    const root = await fixture();
+    const options = {
+      root,
+      target: targetById("tdesktop"),
+      featureRoot: path.resolve("features/direct-download"),
+    };
+    await patchDirectDownload(options);
+    const implementationPath = path.join(
+      root, "Telegram", "SourceFiles", "storage", "download_manager_mtproto.cpp",
+    );
+    const current = await readFile(implementationPath, "utf8");
+    const lateDelivery = /\t\} else \{\n\t\t\/\/ The shared transfer may already hold[\s\S]*?\t\t\}\);\n(?=\t\}\n\treturn id;)/;
+    expect(current).toMatch(lateDelivery);
+    const previous = current.replace(lateDelivery, "");
+    expect(previous).not.toContain("Parts are otherwise only delivered from readyRead/finished");
+    await writeFile(implementationPath, previous, "utf8");
+
+    await patchDirectDownload(options);
+    const migrated = await readFile(implementationPath, "utf8");
+    expect(migrated).toBe(current);
+    await patchDirectDownload(options);
+    expect(await readFile(implementationPath, "utf8")).toBe(current);
+  });
+
   it("offers raw stickers and reaction animations to the direct URL resolver", async () => {
     const { helper } = await patchedFixture();
     expect(helper).toContain('constexpr char kStickerPrefix[] = "bridge-sticker:";');
