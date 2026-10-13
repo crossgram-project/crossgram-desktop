@@ -11,6 +11,7 @@ bool Account::reloadServerSwitchConfiguration(QString *error) {
 	if (!Crossgram::ServerSwitch::ApplyStored(
 			_local->serverSwitchConfigPath(),
 			&config->dcOptions(),
+			Crossgram::ServerSwitch::MissingStoredConfiguration::Official,
 			error)) {
 		return false;
 	}

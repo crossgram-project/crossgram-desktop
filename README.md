@@ -183,6 +183,8 @@ tdata/<account-hash>/server-switch.json
 
 `QSaveFile` provides atomic writes. The file contains connection metadata and a public key, not account credentials.
 
+`tdata/<account-hash>` is per account, so a newly added account starts from a fresh directory. Telegram Desktop hands a new account the MTProto configuration of an existing account of the same environment, and the patched client copies that account's stored `server-switch.json` for it. Its **Server** popup therefore lists the configuration already added for the account it is added from, and both accounts start on the same server. The copy happens once, when the account is created: changing the server of one account afterwards leaves the other accounts alone. An account without a stored file keeps the MTProto configuration it was started with; the reset to the built-in Telegram servers happens only when **Official Telegram** removes the file or when the stored file cannot be read.
+
 ## CI and releases
 
 [`check.yml`](.github/workflows/check.yml) resolves and patches all 28 target/build-mode combinations (including runtime mode for every target) in parallel. Matrix fail-fast is disabled, so a broken upstream or brand does not cancel the others.

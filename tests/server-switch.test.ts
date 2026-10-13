@@ -66,6 +66,39 @@ public:
 \tvoid destroyStaleAuthorizationKeys();
 };
 `,
+    "Telegram/SourceFiles/main/main_domain.cpp": `#include "main/main_domain.h"
+
+#include "core/application.h"
+#include "main/main_account.h"
+
+namespace Main {
+
+not_null<Account*> Domain::add(MTP::Environment environment) {
+\tauto mainDcId = MTP::Instance::Fields::kNotSetMainDc;
+\tconst auto accountConfig = [&](not_null<Account*> account) {
+\t\tmainDcId = account->mtp().mainDcId();
+\t\treturn cloneConfig(account->mtp().config());
+\t};
+\tauto config = [&] {
+\t\tif (_active.current()->mtp().environment() == environment) {
+\t\t\treturn accountConfig(_active.current());
+\t\t}
+\t\treturn (environment == MTP::Environment::Production)
+\t\t\t? cloneConfig(Core::App().fallbackProductionConfig())
+\t\t\t: std::make_unique<MTP::Config>(environment);
+\t}();
+\t_accounts.push_back(AccountWithIndex{
+\t\t.index = index,
+\t\t.account = std::make_unique<Account>(this, _dataName, index)
+\t});
+\tconst auto account = _accounts.back().account.get();
+\taccount->setMtpMainDcId(mainDcId);
+\t_local->startAdded(account, std::move(config));
+\treturn account;
+}
+
+} // namespace Main
+`,
     "Telegram/SourceFiles/main/main_account.cpp": `#include "core/application.h"
 
 void Account::start(std::unique_ptr<MTP::Config> config) {
@@ -166,5 +199,51 @@ describe("server switch patch", () => {
 
     await patchServerSwitch(options);
     expect(await readFile(storagePath, "utf8")).toBe(first);
+  });
+
+  it("gives an added account the configuration of the account it is added from", async () => {
+    const root = await fixture();
+    const options = {
+      root,
+      target: targetById("ayugram"),
+      featureRoot: path.resolve("features/server-switch"),
+    };
+
+    await patchServerSwitch(options);
+    const read = (relative: string) =>
+      readFile(path.join(root, relative), "utf8");
+    const domain = await read("Telegram/SourceFiles/main/main_domain.cpp");
+    expect(domain).toContain("#include \"crossgram/server_switch.h\"");
+    expect(domain).toContain(
+      "\tauto serverSwitchSource = (Account*)nullptr;\n"
+      + "\tconst auto accountConfig = [&](not_null<Account*> account) {\n"
+      + "\t\tserverSwitchSource = account;",
+    );
+    expect(domain).toContain(
+      "\tCrossgram::ServerSwitch::InheritConfiguration(\n"
+      + "\t\taccount,\n"
+      + "\t\tserverSwitchSource);\n"
+      + "\t_local->startAdded(account, std::move(config));",
+    );
+
+    const account = await read("Telegram/SourceFiles/main/main_account.cpp");
+    expect(account).toContain(
+      "Crossgram::ServerSwitch::MissingStoredConfiguration::Keep",
+    );
+    expect(account).toContain(
+      "Crossgram::ServerSwitch::MissingStoredConfiguration::Official",
+    );
+
+    const patched = await Promise.all([
+      domain,
+      account,
+      read("Telegram/SourceFiles/storage/storage_account.cpp"),
+    ]);
+    await patchServerSwitch(options);
+    expect(await Promise.all([
+      read("Telegram/SourceFiles/main/main_domain.cpp"),
+      read("Telegram/SourceFiles/main/main_account.cpp"),
+      read("Telegram/SourceFiles/storage/storage_account.cpp"),
+    ])).toEqual(patched);
   });
 });
