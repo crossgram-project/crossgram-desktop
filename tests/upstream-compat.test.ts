@@ -118,6 +118,35 @@ describe("upstream compatibility", () => {
     await patchUpstreamCompatibility(options);
     expect(await readFile(scannerPath, "utf8")).toBe(first);
   });
+
+  it("leaves the AyuGram scanner alone once upstream reads the ayu_ prefix", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "crossgram-desktop-ayugram-compat-new-"),
+    );
+    temporaryDirectories.push(root);
+    const scannerPath = path.join(
+      root,
+      "Telegram/codegen/codegen/lang/subsets.cpp",
+    );
+    await mkdir(path.dirname(scannerPath), { recursive: true });
+    const upstream = `	for (auto i = qsizetype(0); i + 4 < size; ++i) {
+		const auto isKeyPrefix = (data[i] == 'l' && data[i + 1] == 'n'
+			&& data[i + 2] == 'g' && data[i + 3] == '_')
+			|| (data[i] == 'a' && data[i + 1] == 'y'
+				&& data[i + 2] == 'u' && data[i + 3] == '_');
+		if (!isKeyPrefix
+			|| (i > 0 && IsIdentifierChar(data[i - 1]))) {
+			continue;
+		}
+		auto till = i + 4;
+	}
+`;
+    await writeFile(scannerPath, upstream, "utf8");
+
+    const options = { root, target: targetById("ayugram") };
+    await patchUpstreamCompatibility(options);
+    expect(await readFile(scannerPath, "utf8")).toBe(upstream);
+  });
   it("does not touch upstreams that do not vendor 64Gram's libfido2", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-upstream-compat-none-"));
     temporaryDirectories.push(root);
