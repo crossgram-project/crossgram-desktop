@@ -155,6 +155,31 @@ export async function patchServerSwitch(options: PatchOptions): Promise<void> {
     );
   });
 
+  await context.edit(`${sourceRoot}/main/main_domain.cpp`, (file) => {
+    file.insertAfter(
+      "#include \"main/main_account.h\"",
+      "\n#include \"crossgram/server_switch.h\"",
+      "#include \"crossgram/server_switch.h\"",
+    );
+    // Adding an account clones the MTProto configuration of an already
+    // existing account. Remember which one that is, so that the new account
+    // gets its stored server configuration as well.
+    file.replace(
+      "\tconst auto accountConfig = [&](not_null<Account*> account) {",
+      "\tauto serverSwitchSource = (Account*)nullptr;\n"
+        + "\tconst auto accountConfig = [&](not_null<Account*> account) {\n"
+        + "\t\tserverSwitchSource = account;",
+      "serverSwitchSource",
+    );
+    file.insertBefore(
+      "\t_local->startAdded(account, std::move(config));",
+      "\tCrossgram::ServerSwitch::InheritConfiguration(\n"
+        + "\t\taccount,\n"
+        + "\t\tserverSwitchSource);\n",
+      "Crossgram::ServerSwitch::InheritConfiguration(",
+    );
+  });
+
   await context.edit(`${sourceRoot}/intro/intro_widget.h`, (file) => {
     file.insertAfter("class FlatLabel;", "\nclass PopupMenu;", "class PopupMenu;");
     file.insertAfter(

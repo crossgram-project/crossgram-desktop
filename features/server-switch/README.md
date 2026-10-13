@@ -7,6 +7,7 @@ Integration points:
 - `Intro::Widget`: server button, popup, and editor box;
 - `Storage::Account`: per-account JSON path;
 - `Main::Account`: startup application and MTProto recreation on selection;
+- `Main::Domain`: adding an account inherits the stored configuration of the account Telegram Desktop clones its MTProto configuration from;
 - `MTP::DcOptions`: custom endpoints, custom RSA key, immutable server updates, and special-config state;
 - `ConfigLoader`: skips special config when disabled;
 - `Telegram/CMakeLists.txt`: compiles the injected implementation.

@@ -8,6 +8,7 @@ void Account::start(std::unique_ptr<MTP::Config> config) {
 	if (!Crossgram::ServerSwitch::ApplyStored(
 			_local->serverSwitchConfigPath(),
 			&prepared->dcOptions(),
+			Crossgram::ServerSwitch::MissingStoredConfiguration::Keep,
 			&error)) {
 		LOG(("Server Switch Error: %1").arg(error));
 		prepared->dcOptions().useBuiltInConfiguration();

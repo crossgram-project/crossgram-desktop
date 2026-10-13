@@ -1,6 +1,7 @@
 #include "crossgram/server_switch.h"
 
 #include "base/bytes.h"
+#include "base/debug_log.h"
 #include "base/flat_set.h"
 #include "main/main_account.h"
 #include "mtproto/details/mtproto_rsa_public_key.h"
@@ -241,9 +242,12 @@ void UseOfficial(
 bool ApplyStored(
 		const QString &path,
 		not_null<MTP::DcOptions*> options,
+		MissingStoredConfiguration missing,
 		QString *error) {
 	if (!QFile::exists(path)) {
-		options->useBuiltInConfiguration();
+		if (missing == MissingStoredConfiguration::Official) {
+			options->useBuiltInConfiguration();
+		}
 		return true;
 	}
 	auto configuration = Configuration();
@@ -257,6 +261,34 @@ bool ApplyStored(
 		return Fail(error, u"The custom MTProto configuration is invalid."_q);
 	}
 	return true;
+}
+
+void InheritConfiguration(
+		not_null<Main::Account*> account,
+		Main::Account *source) {
+	if (!source || source == account.get()) {
+		return;
+	}
+	const auto target = account->local().serverSwitchConfigPath();
+	if (QFile::exists(target)) {
+		// The account being added already has a configuration of its own,
+		// stored when an account with the same index was used before.
+		return;
+	}
+	auto file = QFile(source->local().serverSwitchConfigPath());
+	if (!file.open(QIODevice::ReadOnly)) {
+		return;
+	}
+	const auto json = file.readAll();
+	auto configuration = Configuration();
+	auto error = QString();
+	if (!Parse(json, &configuration, &error)
+		|| !Write(target, json, &error)) {
+		LOG(("Server Switch: not inheriting a configuration: %1"_q
+			.arg(error)));
+		return;
+	}
+	LOG(("Server Switch: inherited the configuration of another account."));
 }
 
 void FillMenu(
