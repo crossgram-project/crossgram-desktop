@@ -576,6 +576,7 @@ jobs:
               -u "$(id -u)" \
               -w /usr/src/tdesktop \
               -v "$PWD:/usr/src/tdesktop" \
+              -v "$(dirname "$source")/DesktopPrivate:/usr/src/DesktopPrivate:ro" \
               -e CONFIG=Release \
               crossgram-tdesktop-build \
               /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \

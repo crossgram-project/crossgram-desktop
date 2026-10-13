@@ -520,11 +520,21 @@ QString DocumentData::crossgramDownloadTransport() const {
       "const auto transport = _data->crossgramDownloadTransport();",
     );
     // Telegram Desktop 7.3 draws the unread dot only while no media editor is
-    // open, so keep the upstream condition and only move the dot by the badge.
-    file.replacePattern(
-      /if \(_realParent->isUnreadMedia\(\)( && !mediaEditor)?\) \{\n\t\tauto w = st::normalFont->width\(statusText\);/,
-      "if (_realParent->isUnreadMedia()$1) {\n\t\tauto w = statusleft - nameleft + st::normalFont->width(statusText);",
-      "auto w = statusleft - nameleft + st::normalFont->width(statusText);",
+    // open. Keep whichever condition the checkout carries and go through the
+    // EOL-aware helpers: a Windows checkout has CRLF endings, which a raw
+    // pattern spelled with plain \n never matches.
+    const movedDot = "auto w = statusleft - nameleft + st::normalFont->width(statusText);";
+    const unreadLine = "\n\t\tauto w = st::normalFont->width(statusText);";
+    const unreadPrefixes = [
+      "\tif (_realParent->isUnreadMedia() && !mediaEditor) {",
+      "\tif (_realParent->isUnreadMedia()) {",
+    ] as const;
+    const unreadPrefix = unreadPrefixes.find((candidate) => file.has(candidate + unreadLine))
+      ?? unreadPrefixes[unreadPrefixes.length - 1];
+    file.replace(
+      unreadPrefix + unreadLine,
+      unreadPrefix + "\n\t\t" + movedDot,
+      movedDot,
     );
   });
 
