@@ -20,6 +20,9 @@ export async function patchUpstreamCompatibility(options: PatchOptions): Promise
 
   if (options.target.id === "ayugram") {
     await context.edit("Telegram/codegen/codegen/lang/subsets.cpp", (file) => {
+      // The pinned AyuGram codegen submodule already reads the ayu_ prefix
+      // itself, so there is nothing left to rewrite there.
+      if (file.has("data[i] == 'a'")) return;
       file.replace(
         `		if (data[i] != 'l'
 			|| data[i + 1] != 'n'
