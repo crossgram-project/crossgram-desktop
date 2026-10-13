@@ -126,6 +126,16 @@ describe("desktop updater patch", () => {
     expect(patched).not.toContain("UpdatesPublicKey = \"\\\\\n-----BEGIN RSA PUBLIC KEY-----\\\\n\\\\\nAAAA");
   });
 
+  it("keeps the client update keys optional for Telegram Desktop 7.3", () => {
+    expect(updateKeyPatches(
+      `static const char *UpdatesPublicKey = "AAAA";\n`,
+      key,
+    )).toHaveLength(1);
+    // Telegram Desktop 7.3 moved the client update keys to the embedded
+    // Ed25519 manifest, so a config without them must not fail the patch.
+    expect(updateKeyPatches("constexpr auto ApiId = 1;\n", key)).toEqual([]);
+  });
+
   it("replaces both packer keys and finds the private key include", () => {
     const patches = packerKeyPatches(packerSource, key);
     expect(patches).toHaveLength(2);
