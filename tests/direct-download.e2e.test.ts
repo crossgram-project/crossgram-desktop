@@ -359,4 +359,48 @@ describe("Desktop direct-download patch e2e", () => {
     expect(documentView.match(/const auto transport = _data->crossgramDownloadTransport\(\);/g))
       .toHaveLength(1);
   });
+
+  it("moves the unread dot on a CRLF checkout as well", async () => {
+    const root = await fixture();
+    const options = {
+      root,
+      target: targetById("tdesktop"),
+      featureRoot: path.resolve("features/direct-download"),
+    };
+    const documentViewPath = path.join(
+      root, "Telegram", "SourceFiles", "history", "view", "media", "history_view_document.cpp",
+    );
+    // A Windows checkout has CRLF endings and carries the media editor guard
+    // that Telegram Desktop 7.3 added to the unread dot.
+    const checkout = [
+      "void Document::draw(Painter &p, const PaintContext &context) const {",
+      "\tauto statusText = voiceStatusOverride.isEmpty() ? _statusText : voiceStatusOverride;",
+      "\tp.setFont(st::normalFont);",
+      "\tp.setPen(stm->mediaFg);",
+      "\tp.drawTextLeft(nameleft, statustop, width, statusText);",
+      "",
+      "\tif (_realParent->isUnreadMedia() && !mediaEditor) {",
+      "\t\tauto w = st::normalFont->width(statusText);",
+      "\t\tif (w + st::mediaUnreadSkip + st::mediaUnreadSize <= statuswidth) {",
+      "\t\t\tp.drawEllipse(QRect());",
+      "\t\t}",
+      "\t}",
+      "}",
+      "",
+    ].join("\r\n");
+    await writeFile(documentViewPath, checkout, "utf8");
+
+    await patchDirectDownload(options);
+    const first = await readFile(documentViewPath, "utf8");
+    await patchDirectDownload(options);
+    const second = await readFile(documentViewPath, "utf8");
+
+    expect(first.match(/auto w = statusleft - nameleft \+ st::normalFont->width\(statusText\);/g))
+      .toHaveLength(1);
+    expect(first).toContain("if (_realParent->isUnreadMedia() && !mediaEditor) {\r\n");
+    expect(first.match(/const auto transport = _data->crossgramDownloadTransport\(\);/g))
+      .toHaveLength(1);
+    expect(first.replaceAll("\r\n", "")).not.toContain("\n");
+    expect(second).toBe(first);
+  });
 });
