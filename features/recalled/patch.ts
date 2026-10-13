@@ -41,9 +41,19 @@ export async function patchRecalled(options: PatchOptions): Promise<void> {
   });
 
   await context.edit("Telegram/SourceFiles/history/history_item.cpp", (file) => {
+    // Telegram Desktop 7.3 reports the delivery date from the message
+    // constructor and from applyStreamedDraftFinish as well. Only the
+    // constructor reads it through `history`, so the whole block keeps the
+    // anchor unique and the flags land outside the conditional.
     file.insertAfter(
-      "\tif (const auto until = data.vreport_delivery_until_date()) {",
-      "\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n\n",
+      [
+        "\tif (const auto until = data.vreport_delivery_until_date()) {",
+        "\t\tif (base::unixtime::now() < TimeId(until->v)) {",
+        "\t\t\thistory->owner().histories().reportDelivery(this);",
+        "\t\t}",
+        "\t}",
+      ].join("\n"),
+      "\n\t_recalled = data.is_recalled();\n\t_recalledVisible = data.is_recalled_visible();\n",
       "_recalled = data.is_recalled();",
     );
   });

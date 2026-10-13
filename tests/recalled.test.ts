@@ -19,7 +19,29 @@ async function fixture(): Promise<string> {
     "Telegram/SourceFiles/history/history_item.h":
       "\t[[nodiscard]] bool isDeleted() const;\n\t[[nodiscard]] bool isEmpty() const;\n\tmutable MessageFlags _flags = 0;\n\tbool _deleted = false;\n\tbool _deletedAnimated = false;\n",
     "Telegram/SourceFiles/history/history_item.cpp":
-      "\tif (const auto until = data.vreport_delivery_until_date()) {\nvoid HistoryItem::applyEdition(HistoryMessageEdition &&edition) {\n",
+      "\tif (const auto rank = data.vfrom_rank()) {\n"
+      + "\t\tif (!rank->v.isEmpty()) {\n"
+      + "\t\t\tAddComponents(HistoryMessageFromRank::Bit());\n"
+      + "\t\t\tGet<HistoryMessageFromRank>()->rank = qs(*rank);\n"
+      + "\t\t}\n"
+      + "\t}\n"
+      + "\n"
+      + "\tif (const auto until = data.vreport_delivery_until_date()) {\n"
+      + "\t\tif (base::unixtime::now() < TimeId(until->v)) {\n"
+      + "\t\t\thistory->owner().histories().reportDelivery(this);\n"
+      + "\t\t}\n"
+      + "\t}\n"
+      + "}\n"
+      + "\n"
+      + "void HistoryItem::applyStreamedDraftFinish(const MTPDmessage &data) {\n"
+      + "\tif (const auto until = data.vreport_delivery_until_date()) {\n"
+      + "\t\tif (base::unixtime::now() < TimeId(until->v)) {\n"
+      + "\t\t\t_history->owner().histories().reportDelivery(this);\n"
+      + "\t\t}\n"
+      + "\t}\n"
+      + "}\n"
+      + "\n"
+      + "void HistoryItem::applyEdition(HistoryMessageEdition &&edition) {\n",
     "Telegram/SourceFiles/history/history_item_edition.h": "\tbool isEditHide = false;\n",
     "Telegram/SourceFiles/history/history_item_edition.cpp": "isEditHide = message.is_edit_hide();\n",
     "Telegram/SourceFiles/history/view/history_view_message.cpp":
@@ -54,6 +76,13 @@ describe("recalled desktop patch", () => {
     expect(first[1]).toContain("isRecalledVisible() const");
     expect(first[2]).toContain("_recalled = data.is_recalled();");
     expect(first[2]).toContain("_recalledVisible = data.is_recalled_visible();");
+    // The flags belong to the message constructor, not to the report delivery
+    // branch that upstream repeats in applyStreamedDraftFinish.
+    expect(first[2].match(/_recalled = data\.is_recalled\(\);/g) ?? []).toHaveLength(1);
+    expect(first[2]).toContain(
+      "\t\t\thistory->owner().histories().reportDelivery(this);\n\t\t}\n\t}\n"
+      + "\t_recalled = data.is_recalled();",
+    );
     expect(first[2]).toContain("if (edition.recalled) {");
     expect(first[3]).toContain("bool recalled = false");
     expect(first[3]).toContain("bool recalledVisible = false");
