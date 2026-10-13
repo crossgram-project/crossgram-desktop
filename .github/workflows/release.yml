@@ -224,6 +224,21 @@ jobs:
           if (-not $atlRoot) { throw 'Could not locate ATL' }
           $env:INCLUDE = "$(Join-Path $atlRoot 'include');$env:INCLUDE"
           $env:LIB = "$(Join-Path $atlRoot 'lib/x64');$env:LIB"
+          # MSYS2 stopped building diffutils for the retired msvcrt (mingw64)
+          # environment on 2026-09-27, while the older forks still ask pacman
+          # for mingw-w64-x86_64-diffutils and the whole preparation step then
+          # aborts with 'target not found'. The MSYS package of the same name
+          # still ships diff and is on PATH inside the build shell, so point
+          # the upstream script at it.
+          $prepareScript = Join-Path $telegram 'build/prepare/prepare.py'
+          $prepareSource = [IO.File]::ReadAllText($prepareScript)
+          $preparePatched = $prepareSource.Replace(
+            'mingw-w64-x86_64-diffutils',
+            'diffutils')
+          if ($preparePatched -ne $prepareSource) {
+            [IO.File]::WriteAllText($prepareScript, $preparePatched)
+            Write-Host 'Swapped the retired mingw64 diffutils for the MSYS package.'
+          }
           Push-Location $telegram
           try {
             & .\build\prepare\win.bat silent qt6
