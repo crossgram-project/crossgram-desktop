@@ -480,10 +480,7 @@ QString DocumentData::crossgramDownloadTransport() const {
       `	auto statusText = voiceStatusOverride.isEmpty() ? _statusText : voiceStatusOverride;
 	p.setFont(st::normalFont);
 	p.setPen(stm->mediaFg);
-	p.drawTextLeft(nameleft, statustop, width, statusText);
-
-	if (_realParent->isUnreadMedia()) {
-		auto w = st::normalFont->width(statusText);`,
+	p.drawTextLeft(nameleft, statustop, width, statusText);`,
       `	auto statusText = voiceStatusOverride.isEmpty() ? _statusText : voiceStatusOverride;
 	const auto transport = _data->crossgramDownloadTransport();
 	auto statusleft = nameleft;
@@ -519,11 +516,15 @@ QString DocumentData::crossgramDownloadTransport() const {
 	}
 	p.setFont(st::normalFont);
 	p.setPen(stm->mediaFg);
-	p.drawTextLeft(statusleft, statustop, width, statusText);
-
-	if (_realParent->isUnreadMedia()) {
-		auto w = statusleft - nameleft + st::normalFont->width(statusText);`,
+	p.drawTextLeft(statusleft, statustop, width, statusText);`,
       "const auto transport = _data->crossgramDownloadTransport();",
+    );
+    // Telegram Desktop 7.3 draws the unread dot only while no media editor is
+    // open, so keep the upstream condition and only move the dot by the badge.
+    file.replacePattern(
+      /if \(_realParent->isUnreadMedia\(\)( && !mediaEditor)?\) \{\n\t\tauto w = st::normalFont->width\(statusText\);/,
+      "if (_realParent->isUnreadMedia()$1) {\n\t\tauto w = statusleft - nameleft + st::normalFont->width(statusText);",
+      "auto w = statusleft - nameleft + st::normalFont->width(statusText);",
     );
   });
 

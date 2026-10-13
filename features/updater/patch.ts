@@ -77,7 +77,12 @@ export function versionPatch(source: string, version: number): TextPatch {
 
 /** Both client-side update keys start trusting the Crossgram signature. */
 export function updateKeyPatches(source: string, key: string): TextPatch[] {
-  return keyPatches(source, "static const char \\*(?:UpdatesPublicKey|UpdatesPublicBetaKey) = ", key);
+  return keyPatches(
+    source,
+    "static const char \\*(?:UpdatesPublicKey|UpdatesPublicBetaKey) = ",
+    key,
+    true,
+  );
 }
 
 /** The upstream packer verifies its own output, so it needs the same key. */
@@ -85,9 +90,15 @@ export function packerKeyPatches(source: string, key: string): TextPatch[] {
   return keyPatches(source, "const char \\*(?:PublicKey|PublicBetaKey) = ", key);
 }
 
-function keyPatches(source: string, declaration: string, key: string): TextPatch[] {
+function keyPatches(
+  source: string,
+  declaration: string,
+  key: string,
+  optional = false,
+): TextPatch[] {
   const pattern = new RegExp("(" + declaration + '")[\\s\\S]*?(";)', "g");
   const matches = [...source.matchAll(pattern)];
+  if (matches.length === 0 && optional) return [];
   if (matches.length === 0 || matches.length > 2) {
     throw new PatchError("Expected one or two update keys, found " + matches.length + ".");
   }
@@ -225,7 +236,17 @@ export async function patchUpdater(options: UpdaterPatchOptions): Promise<void> 
     file.replace(patch.search, patch.replacement, patch.marker);
   });
   await context.edit(CONFIG_ROOT, (file) => {
-    for (const patch of updateKeyPatches(file.text(), key)) {
+    const patches = updateKeyPatches(file.text(), key);
+    if (patches.length === 0) {
+      console.warn(
+        "Crossgram updater: " + CONFIG_ROOT + " no longer declares the client"
+        + " update keys, so the Crossgram feed key was not installed there."
+        + " Telegram Desktop 7.3 verifies updates against the Ed25519 root key"
+        + " and manifest embedded from Telegram/Resources/update/, which needs"
+        + " its own port before Crossgram builds can install their own updates.",
+      );
+    }
+    for (const patch of patches) {
       file.replace(patch.search, patch.replacement, patch.marker);
     }
   });
