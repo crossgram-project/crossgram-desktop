@@ -101,9 +101,14 @@ jobs:
           submodules: recursive
           path: work/TBuild/source
 
+      # Restore and save are split so the prepared dependencies are kept even
+      # when the application build fails afterwards: actions/cache only saves
+      # on a successful job, so every failing run used to rebuild Qt and
+      # WebRTC from scratch.
       - name: Restore native dependency cache
+        id: native-deps
         if: runner.os == 'Windows' || runner.os == 'macOS'
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: |
             work/TBuild/Libraries
@@ -246,6 +251,7 @@ jobs:
           } finally {
             Pop-Location
           }
+          New-Item -ItemType File -Force -Path (Join-Path $env:GITHUB_WORKSPACE 'work/TBuild/.native-deps-ready') | Out-Null
 
           # FastLink keeps the final link below the hosted runner memory limit
           # while still emitting the standalone PDB shipped in the symbols asset.
@@ -774,6 +780,7 @@ jobs:
             echo "Transient dependency download failure; retrying macOS preparation ($attempt/3)."
             sleep $((attempt * 20))
           done
+          touch "$GITHUB_WORKSPACE/work/TBuild/.native-deps-ready"
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
           configure_args=()
           if [ "$TARGET" = materialgram ]; then
@@ -852,6 +859,21 @@ jobs:
             --arg tag "$UPSTREAM_TAG" \
             '{ target: $target, repository: $repository, tag: $tag }' \
             > "$GITHUB_WORKSPACE/artifacts/crossgram-$TARGET-$BRAND_BATCH-macos-$VERSION.upstream.json"
+
+      # The build steps create the marker only after the dependency
+      # preparation finished, so a half-prepared tree is never cached.
+      - name: Save native dependency cache
+        if: >-
+          always() &&
+          (runner.os == 'Windows' || runner.os == 'macOS') &&
+          steps.native-deps.outputs.cache-hit != 'true' &&
+          hashFiles('work/TBuild/.native-deps-ready') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            work/TBuild/Libraries
+            work/TBuild/ThirdParty
+          key: ${{ steps.native-deps.outputs.cache-primary-key }}
 
       - name: Upload artifact
         if: always()
