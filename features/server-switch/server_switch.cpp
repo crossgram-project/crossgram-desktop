@@ -284,7 +284,7 @@ void InheritConfiguration(
 	auto error = QString();
 	if (!Parse(json, &configuration, &error)
 		|| !Write(target, json, &error)) {
-		LOG(("Server Switch: not inheriting a configuration: %1"_q
+		LOG((u"Server Switch: not inheriting a configuration: %1"_q
 			.arg(error)));
 		return;
 	}
