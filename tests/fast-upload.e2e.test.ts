@@ -112,6 +112,22 @@ describe("Desktop hash-first upload patch e2e", () => {
     expect(implementation).toContain("enqueueUpload(itemId, file);");
   });
 
+  it("settles the optimistic upload progress before the media is sent", async () => {
+    const { header, implementation } = await patchedFixture();
+    expect(header).toContain("finishFastUploadProgress(FullMsgId itemId");
+    expect(implementation).toContain("void Uploader::finishFastUploadProgress(");
+    expect(implementation).toContain("photo->uploadingData->offset = file->partssize;");
+    expect(implementation).toContain("_photoProgress.fire_copy(itemId);");
+    expect(implementation).toContain("document->uploadingData->offset = document->uploadingData->size;");
+    expect(implementation).toContain("_documentProgress.fire_copy(itemId);");
+    // The progress has to settle inside finishFastUpload, before it hands the
+    // entry to maybeFinishFront() and the media leaves the uploading state.
+    const finish = implementation.indexOf("void Uploader::finishFastUpload(");
+    const settle = implementation.indexOf("finishFastUploadProgress(itemId, file);", finish);
+    expect(settle).toBeGreaterThan(finish);
+    expect(settle).toBeLessThan(implementation.indexOf("maybeFinishFront();", finish));
+  });
+
   it("passes dimensions, duration, and thumbnail data to the V3 preflight", async () => {
     const { schema, implementation } = await patchedFixture();
     expect(schema).toContain("thumbnail:bytes thumbnail_width:int thumbnail_height:int");
