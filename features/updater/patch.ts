@@ -6,17 +6,15 @@ import { PatchError } from "../../src/core/text-file.js";
 import type { Target } from "../../src/targets.js";
 
 /**
- * The generated per target/brand/platform feed. The client asks for
- * prefix/currentN, where N is Platform::AutoUpdateVersion(), so the publish
- * job writes current2/current3/current6 next to it.
+ * 按 target/brand/platform 组织的更新源根地址。客户端请求 prefix/currentN
+ * （N = Platform::AutoUpdateVersion()），发布任务在该目录下写入 current2/3/6。
  */
 export const FEED_BASE =
   "https://raw.githubusercontent.com/crossgram-project/crossgram-desktop/updates";
 
 /**
- * Crossgram build numbers stay above every upstream AppVersion, so an
- * available version is always newer than the running one, while an installed
- * Crossgram build recognises the payload of its own run.
+ * Crossgram 构建号固定高于上游 AppVersion，保证新发布版本始终大于当前版本，
+ * 且已安装的 Crossgram 能识别同次构建的更新包。
  */
 export const VERSION_BASE = 100_000_000;
 
@@ -35,14 +33,14 @@ export interface UpdaterPatchOptions {
   readonly platform: UpdatePlatform | null;
   readonly build: number | null;
   readonly featureRoot: string;
-  /** RSA private key the CI injects into the upstream packer; optional. */
+  /** CI 注入给上游 Packer 的 RSA 私钥（可选）。 */
   readonly privateKey?: string | null;
 }
 
 export interface TextPatch {
   readonly search: string;
   readonly replacement: string;
-  /** A file that already contains this marker is left alone. */
+  /** 已包含此标记的文件跳过补丁。 */
   readonly marker: string;
 }
 
@@ -61,13 +59,13 @@ export function updatePrefix(
   return FEED_BASE + "/" + target + "-" + brand + "/" + platform;
 }
 
-/** Render a PEM the way the upstream sources spell their C++ literals. */
+/** 将 PEM 格式化为上游源码使用的多行 C++ 字符串字面量。 */
 export function cppKeyLiteral(pem: string): string {
   const lines = pem.replaceAll("\r\n", "\n").trimEnd().split("\n");
   return "\\\n" + lines.map((line) => line + "\\n\\\n").join("");
 }
 
-/** constexpr auto AppVersion = <build>; - the version the updater compares. */
+/** 替换更新器用于比对版本的 constexpr auto AppVersion = <build>;。 */
 export function versionPatch(source: string, version: number): TextPatch {
   const match = /constexpr auto AppVersion = \d+;/.exec(source);
   if (!match) throw new PatchError("Could not find AppVersion in the version header.");
@@ -75,7 +73,7 @@ export function versionPatch(source: string, version: number): TextPatch {
   return { search: match[0], replacement, marker: replacement };
 }
 
-/** Both client-side update keys start trusting the Crossgram signature. */
+/** 将客户端正式与测试更新公钥替换为 Crossgram 公钥。 */
 export function updateKeyPatches(source: string, key: string): TextPatch[] {
   return keyPatches(
     source,
@@ -85,7 +83,7 @@ export function updateKeyPatches(source: string, key: string): TextPatch[] {
   );
 }
 
-/** The upstream packer verifies its own output, so it needs the same key. */
+/** 上游 Packer 会用公钥自检打包产物，需同步替换。 */
 export function packerKeyPatches(source: string, key: string): TextPatch[] {
   return keyPatches(source, "const char \\*(?:PublicKey|PublicBetaKey) = ", key);
 }
@@ -111,7 +109,7 @@ function keyPatches(
   });
 }
 
-/** The upstream packer target only exists for special builds. */
+/** 上游默认仅在 DESKTOP_APP_SPECIAL_TARGET 下启用 Packer 目标。 */
 export function packerTargetPatch(source: string): TextPatch {
   const match = /if \(DESKTOP_APP_SPECIAL_TARGET\)(\s*)add_executable\(Packer\)/.exec(source);
   if (!match) throw new PatchError("Could not find the upstream Packer target.");
@@ -126,9 +124,8 @@ export function packerTargetPatch(source: string): TextPatch {
 }
 
 /**
- * Where the upstream packer includes its signing keys. Telegram Desktop keeps
- * them in a sibling DesktopPrivate directory, the forks keep them next to the
- * packer itself.
+ * 解析上游 Packer 引入签名私钥头文件的相对路径：
+ * Telegram Desktop 放在同级 DesktopPrivate 目录，其他分支放在 Packer 同目录。
  */
 export function packerKeyHeaderRelative(source: string): string | null {
   if (source.includes('"../../../../DesktopPrivate/packer_private.h"')) {
@@ -139,9 +136,7 @@ export function packerKeyHeaderRelative(source: string): string | null {
 }
 
 /**
- * The private key header of the upstream packer. Every fork references
- * PrivateKey, most of them PrivateBetaKey, and the forks that do not include
- * Telegram Desktop's separate alpha_private.h read AlphaPrivateKey from here.
+ * 生成 Packer 私钥头文件内容。未单独引入 alpha_private.h 的分支也会从这里读取 AlphaPrivateKey。
  */
 export function keyHeader(privateKey: string, withAlphaKey: boolean): string {
   const lines = [
@@ -171,7 +166,7 @@ async function installPackerKeys(
   if (!relative) throw new PatchError("Could not locate the packer private key include.");
   const target = join(options.root, "Telegram/SourceFiles/_other", relative);
   await mkdir(dirname(target), { recursive: true });
-  // Telegram Desktop and its x64 fork keep the alpha key in a separate header.
+  // Telegram Desktop 与 64Gram 将 alpha 私钥放在独立的 alpha_private.h 中
   const separateAlphaHeader = packerSource.includes('"../../../../DesktopPrivate/alpha_private.h"');
   await writeFile(target, keyHeader(privateKey, !separateAlphaHeader), "utf8");
   if (separateAlphaHeader) {
@@ -179,7 +174,7 @@ async function installPackerKeys(
   }
 }
 
-/** The upstream forks spell the prefix reader in a few different ways. */
+/** 不同上游分支中 readAutoupdatePrefixRaw 的函数签名格式。 */
 export const PREFIX_SIGNATURES = [
   "const QString &readAutoupdatePrefixRaw()",
   "const QString& readAutoupdatePrefixRaw()",
@@ -194,7 +189,7 @@ export function prefixSignature(source: string): string {
   return found[0] as string;
 }
 
-/** Keep the fork's own return type so the injected body still compiles. */
+/** 保留当前分支的函数返回类型签名，确保替换后可正常编译。 */
 export function prefixFunction(prefix: string, signature: string = PREFIX_SIGNATURES[0]): string {
   return [
     signature + " {",

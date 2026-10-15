@@ -18,19 +18,9 @@ namespace {
 
 constexpr auto kPacketVirtualKey = WPARAM(0xE7); // VK_PACKET
 
-// Windows reports characters injected with KEYEVENTF_UNICODE as a VK_PACKET
-// key press followed by their WM_CHAR. Qt's key mapper consumes that WM_CHAR
-// while handling the key press and reuses its own key record when the same
-// virtual key is pressed again without an intermediate key release, so an
-// input tool that does not release every injected packet (WeChat voice input
-// does not, see the feature README) makes the previous character repeat and
-// the new one disappear.
-//
-// Swallowing the VK_PACKET key press and key release leaves the character in
-// the queue, where Qt dispatches it through its own character path: the same
-// path Qt uses for characters that carry no usable key information. Surrogate
-// pairs are combined here because Qt only combines them while reading the
-// character of a key press, which this filter suppresses.
+// 拦截 VK_PACKET 的按下与释放事件，让随后的 WM_CHAR 走 Qt 纯字符分发路径，
+// 避免输入工具连续注入未释放的 VK_PACKET 时被 Qt 误判为自动连发而吞字。
+// 代理对原本由 Qt 在按键按下路径中合并，此处需手动拼接并提交。
 class Filter final : public QAbstractNativeEventFilter {
 public:
 	bool nativeEventFilter(
@@ -95,8 +85,7 @@ private:
 } // namespace
 
 void Start() {
-	// One filter per process: Core::Application restarts keep the same
-	// QApplication, so the guard also keeps us from installing it twice.
+	// Core::Application 重启会复用同一个 QApplication，静态守卫防止重复注册过滤器
 	[[maybe_unused]] static const auto installed = [] {
 		const auto application = QCoreApplication::instance();
 		if (!application) {

@@ -9,9 +9,7 @@ namespace Crossgram::MergedForward {
 void Mark(PeerData *peer);
 [[nodiscard]] bool IsPeer(const PeerData *peer);
 
-// Synthetic chats address messages by hashed ids, so a history request
-// anchored at id 1 cannot collide with a message of the bundle. The relay
-// answers it with the oldest page of the transcript.
+// 合成会话的消息 ID 均为哈希值，不会与 offsetId = 1 冲突；服务端收到该哨兵值时返回最早一页消息。
 inline constexpr auto kFirstMessageOffsetId = 1;
 
 } // namespace Crossgram::MergedForward

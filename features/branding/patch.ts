@@ -141,9 +141,8 @@ export async function patchBranding(options: PatchOptions): Promise<void> {
 }
 
 /**
- * Patch one universal binary. Unlike the legacy per-brand mode this keeps
- * a stable Cross platform identity and stores the selected display brand in tdata.
- * The menu is available from the main menu and a restart applies the change.
+ * 注入运行时品牌切换支持：保持固定的 Cross 平台标识，将选中的显示品牌保存在 tdata 中，
+ * 通过主菜单切换并重启生效。
  */
 async function patchRuntimeBranding(
   options: PatchOptions,
@@ -207,6 +206,5 @@ async function patchRuntimeBranding(
     );
   });
 
-  // Runtime mode uses the stable Cross platform identity for every selection.
-  // This makes a single package usable under every selectable brand.
+  // runtime 模式统一使用固定的 Cross 平台标识，使单包可切换所有显示品牌
 }

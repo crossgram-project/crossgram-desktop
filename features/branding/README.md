@@ -1,13 +1,6 @@
-# Branding feature
+# 品牌化与图标切换（`features/branding`）
 
-This feature gives every build an independent application name and platform identifier. The default `cross` brand keeps the upstream icon; `qq`, `wechat`, `wecom`, `dingtalk`, and `discord` use the corresponding current App Store artwork.
+为构建产物赋予独立的应用名称、平台标识（Windows AppId、macOS Bundle ID、Linux Desktop ID）与启动图标。
 
-The default mode is `--brand runtime`. Explicit legacy per-brand modes are still supported. Runtime mode ships a
-single binary with stable Cross application identifiers and adds a **Crossgram brand** action to the main menu. The
-selected id is persisted in `tdata/crossgram-brand`; changing it restarts the
-client so the next launch uses the selected display name. Platform package
-identifiers remain those of the universal package by design.
-
-Branding changes are limited to application metadata and launcher icons. They do not alter Telegram protocol behavior, chat assets, or tray status icons.
-
-The themed builds are unofficial and are not affiliated with, endorsed by, or distributed by Tencent, Alibaba, or Discord. Source and hashes for downloaded artwork are recorded in `assets/SOURCES.md`.
+- 默认构建模式为 `--brand runtime`：生成单一通用可执行文件，并在主菜单提供 **Crossgram brand** 切换项（选择结果保存在 `tdata/crossgram-brand`，重启后生效）。
+- 可选品牌：`cross`（保持上游图标）、`qq`（QQ · Cross）、`wechat`（微信 · Cross）、`wecom`（企业微信 · Cross）、`dingtalk`（钉钉 · Cross）、`discord`（Discord · Cross）。图标来源与 SHA-256 记录于 [`assets/SOURCES.md`](assets/SOURCES.md)。

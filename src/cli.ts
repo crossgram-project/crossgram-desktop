@@ -51,7 +51,7 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
   const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const target = targetById(values.target);
   const requestedBrand = values.brand ?? "runtime";
-  // `runtime` builds keep one binary and expose all themed brands in-app.
+  // runtime 构建只产出一个二进制，在应用内切换各品牌标题
   const brand = requestedBrand === "runtime"
     ? null
     : resolveBrand(target, brandById(requestedBrand));

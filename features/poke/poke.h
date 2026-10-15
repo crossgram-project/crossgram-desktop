@@ -15,18 +15,13 @@ class SessionController;
 namespace Crossgram::Poke {
 
 /**
- * Ask the relay what this conversation supports and remember the answer for the
- * session. Called when a chat is opened, so the menu entry is usually ready
- * before the user opens any menu.
+ * 打开会话时预查询并缓存服务端支持的特性，确保首次打开右键菜单时即可显示。
  */
 void Warm(not_null<Main::Session*> session, not_null<PeerData*> conversation);
 
 /**
- * Append the poke entry, including its burst submenu, to a peer or userpic menu.
- *
- * Nothing is added while the relay has not answered, and nothing is added once
- * it answered that this conversation cannot be poked; that is what keeps the
- * entry hidden on servers without the feature, such as official Telegram.
+ * 向会话或头像菜单追加“戳一戳”及连戳子菜单。
+ * 仅在服务端明确返回支持时显示，官方 Telegram 等服务端不会展示该项。
  */
 void AddMenuAction(
 	not_null<Window::SessionController*> controller,

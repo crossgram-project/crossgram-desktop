@@ -10,14 +10,10 @@ interface PatchOptions {
 const sourceRoot = "Telegram/SourceFiles";
 
 /**
- * Keep injected KEYEVENTF_UNICODE characters intact on Windows.
+ * 修复 Windows 下通过 KEYEVENTF_UNICODE 注入字符时的吞字与重复问题。
  *
- * Qt's Windows key mapper records one key record per virtual key and treats a
- * repeated VK_PACKET key press without an intermediate key release as an
- * auto-repeat of the previous packet, which duplicates the previous character
- * and drops the new one. Tools that commit text this way (WeChat voice input,
- * for example) do not guarantee a key release per packet, so the client has to
- * route those key presses around the record; see the feature README.
+ * Qt 的 Windows 按键映射器会将缺少中间 keyup 的连续 VK_PACKET 按下当成自动连发，
+ * 导致前一个字符重复、新字符丢失（例如微信语音输入）。这里安装原生事件过滤器绕过该按键记录。
  */
 export async function patchWinUnicodeInput(options: PatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);

@@ -6,19 +6,12 @@
 
 namespace Crossgram::WinUnicodeInput {
 
-// Windows delivers text injected with KEYEVENTF_UNICODE as a VK_PACKET key
-// press followed by the WM_CHAR message carrying that character. Qt's Windows
-// key mapper stores one key record per virtual key and treats any repeated
-// key press that has no matching key release in between as an auto-repeat:
-// it replays the recorded character of the previous packet and drops the
-// character of the new one. Windows input tools do not guarantee that every
-// injected packet is released before the next one (see the capture in the
-// feature README), so the character that follows such a packet is duplicated
-// and its own character is lost.
+// Windows 将 KEYEVENTF_UNICODE 注入的字符拆为 VK_PACKET 按下消息与随后的 WM_CHAR。
+// Qt 的 Windows 按键映射器按虚拟键记录按键状态；若连续收到两次按下而中间没有释放
+//（如微信语音输入等工具不一定为每个包发送 keyup），Qt 会将其当成自动连发，
+// 重放上一次记录的字符并丢弃当前字符。
 //
-// This state machine decides what to do with each native message. The glue in
-// win_unicode_input.cpp maps MSG values onto these events, so the behaviour can
-// be verified without Windows or Qt.
+// 此状态机独立于 Windows/Qt，由 win_unicode_input.cpp 将 MSG 映射为 Event 调用。
 enum class Event {
 	Other,
 	PacketKeyDown,
@@ -43,15 +36,11 @@ public:
 	[[nodiscard]] Reaction onEvent(Event event, char16_t value = 0) {
 		switch (event) {
 		case Event::PacketKeyDown:
-			// Swallow the key press so that Qt never records it. The
-			// accompanying WM_CHAR stays in the queue and is dispatched on
-			// its own, which is exactly how Qt handles characters that have
-			// no usable key information.
+			// 吞掉 VK_PACKET 按下事件，避免 Qt 记录按键状态；队列中的 WM_CHAR 会按纯字符路径独立分发
 			_packet = true;
 			return { Action::Swallow };
 		case Event::PacketKeyUp:
-			// The key release only exists to close Qt's record for a key
-			// press we already dropped.
+			// 对应的按下事件已被拦截，直接吞掉释放事件
 			_packet = false;
 			return { Action::Swallow };
 		case Event::Char:
@@ -59,7 +48,7 @@ public:
 		case Event::Other:
 			break;
 		}
-		// Any other native message means the queue moved on.
+		// 收到其他消息说明当前包已结束
 		_packet = false;
 		return { Action::Pass };
 	}
@@ -69,9 +58,7 @@ private:
 		const auto packet = _packet;
 		_packet = false;
 		if (packet && value >= 0xD800 && value <= 0xDBFF) {
-			// Qt combines surrogate pairs itself while reading the character
-			// of a key press, and that key press no longer exists, so keep
-			// the high half until its low half arrives.
+			// Qt 仅在处理按键按下时合并代理对，拦截按下后需自行暂存高代理项
 			_highSurrogate = value;
 			return { Action::Swallow };
 		}
@@ -84,9 +71,7 @@ private:
 			_highSurrogate = 0;
 			return result;
 		}
-		// A character that was not injected as a packet key press (a typed
-		// key, an IME commit, or a posted text message) leaves the decision
-		// to Qt, exactly like a character that ends a pending pair.
+		// 非 VK_PACKET 注入的字符（普通按键、IME 提交等）交由 Qt 默认逻辑处理
 		_highSurrogate = 0;
 		return { Action::Pass };
 	}

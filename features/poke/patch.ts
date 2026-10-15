@@ -11,10 +11,8 @@ const sourceRoot = "Telegram/SourceFiles";
 const include = '#include "crossgram/poke.h"';
 
 /**
- * QQ poke ("戳一戳") entry for the menus Telegram Desktop builds around an
- * avatar. The relay decides whether the entry exists at all: the patched client
- * asks `crossgram.getFeatures` for the conversation and shows the action only
- * when the answer advertises poke support, so official servers never see it.
+ * 为头像与会话菜单接入“戳一戳”入口。客户端通过 `crossgram.getFeatures`
+ * 探测当前会话是否支持戳一戳，仅在服务端支持时显示菜单项。
  */
 export async function patchPoke(options: PatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);
@@ -29,7 +27,7 @@ export async function patchPoke(options: PatchOptions): Promise<void> {
     );
   });
 
-  // The wire contract: ask before showing, then send the burst.
+  // 注册探测与发送戳一戳的 TL RPC
   await context.edit(`${sourceRoot}/mtproto/scheme/api.tl`, (file) => {
     file.insertAfter(
       "upload.getFile#be5335be flags:# precise:flags.0?true cdn_supported:flags.1?true location:InputFileLocation offset:long limit:int = upload.File;",
@@ -49,7 +47,7 @@ export async function patchPoke(options: PatchOptions): Promise<void> {
 
   await context.edit(`${sourceRoot}/window/window_peer_menu.cpp`, (file) => {
     file.insertAfter('#include "apiwrap.h"', `\n\n${include}`, include);
-    // Message avatars: the entry pokes the message author in this chat.
+    // 消息头像菜单：在当前会话中戳消息发送者
     file.insertAfter(
       `	if (searchInEntry) {
 		addAction(tr::lng_context_search_from(tr::now), [=] {
@@ -64,7 +62,7 @@ export async function patchPoke(options: PatchOptions): Promise<void> {
 		addAction);`,
       "Crossgram::Poke::AddMenuAction(\n\t\tcontroller,\n\t\tpeer,",
     );
-    // Direct chats: the chat menu sits next to the peer avatar in the header.
+    // 私聊顶栏菜单
     file.replace(
       `void Filler::fillHistoryActions() {
 	addToggleMuteSubmenu(true);`,
@@ -73,7 +71,7 @@ export async function patchPoke(options: PatchOptions): Promise<void> {
 	addToggleMuteSubmenu(true);`,
       "Crossgram::Poke::AddMenuAction(_controller, _peer, _peer, _addAction);\n\taddToggleMuteSubmenu(true);",
     );
-    // Peer profiles: the entry pokes the user whose profile is open.
+    // 用户资料页菜单
     file.replace(
       `void Filler::fillProfileActions() {
 	addTTLSubmenu(true);`,
@@ -84,7 +82,7 @@ export async function patchPoke(options: PatchOptions): Promise<void> {
     );
   });
 
-  // Ask as soon as a chat is opened, so the entry is ready for the first menu.
+  // 打开会话时立即发起特性探测，确保首次打开菜单时结果已就绪
   await context.edit(`${sourceRoot}/window/window_session_controller.cpp`, (file) => {
     file.insertAfter('#include "window/window_session_controller.h"', `\n\n${include}`, include);
     file.insertAfter(

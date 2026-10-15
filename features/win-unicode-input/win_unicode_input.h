@@ -4,10 +4,8 @@
 
 namespace Crossgram::WinUnicodeInput {
 
-// Keeps injected KEYEVENTF_UNICODE input intact on Windows by handling the
-// VK_PACKET key presses that Windows synthesizes for it before Qt's Windows
-// key mapper can mistake them for auto-repeats of an earlier packet.
-// Does nothing on other platforms.
+// 在 Windows 下拦截 KEYEVENTF_UNICODE 合成的 VK_PACKET 按键消息，
+// 防止 Qt 按键映射器将未释放的连续包误判为自动连发。非 Windows 平台为空操作。
 void Start();
 
 } // namespace Crossgram::WinUnicodeInput

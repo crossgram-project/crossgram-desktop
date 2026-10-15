@@ -8,16 +8,16 @@ class PopupMenu;
 
 namespace Crossgram::Branding {
 
-// Initializes the persisted runtime brand and updates the Qt display name.
+// 读取持久化的运行时品牌并更新 Qt 应用显示名称。
 void Initialize();
 
-// Adds runtime brand choices to an already-owned popup menu.
+// 向已创建的弹出菜单追加运行时品牌切换项。
 void FillMenu(Ui::PopupMenu *menu);
 
-// Returns the selected display name.
+// 返回当前选中的品牌显示名称。
 QString CurrentTitle();
 
-// Applies and persists a brand id. Returns false for unknown ids.
+// 切换并持久化品牌 ID，未知 ID 返回 false。
 bool SetBrand(const QString &id);
 
 } // namespace Crossgram::Branding

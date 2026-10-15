@@ -24,10 +24,10 @@
 namespace Crossgram::Poke {
 namespace {
 
-/** Burst sizes the menu offers; the relay caps them with its own maxCount. */
+/** 菜单提供的连戳次数选项，上限受服务端返回的 maxCount 限制。 */
 constexpr int kCounts[] = { 1, 5, 10 };
 
-/** Probes that never arrive are repeated no faster than this. */
+/** 未响应的探测请求最小重试间隔。 */
 constexpr auto kProbeDelayMs = qint64(60 * 60 * 1000);
 
 enum class Support {
@@ -46,10 +46,10 @@ struct SessionState {
 	explicit SessionState(not_null<Main::Session*> session) : session(session) {
 	}
 
-	/** Identifies the owning session, so a recycled address never matches. */
+	/** 校验所属 Session，防止裸指针地址被复用后误命中。 */
 	base::weak_ptr<Main::Session> session;
 
-	/** The relay rejected the feature query: this server has no Crossgram API. */
+	/** 服务端拒绝了特性查询（非 Crossgram 服务端）。 */
 	bool unavailable = false;
 
 	std::map<uint64, ConversationState> conversations;
@@ -72,7 +72,7 @@ SessionState &StateFor(not_null<Main::Session*> session) {
 	return *result;
 }
 
-/** Read `{"poke":{"maxCount":n}}` from the relay's feature payload. */
+/** 从服务端特性响应中解析 `{"poke":{"maxCount":n}}`。 */
 std::optional<int> ParseMaxCount(const MTPDataJSON &result) {
 	return result.match([](const MTPDdataJSON &data) {
 		const auto document = QJsonDocument::fromJson(data.vdata().v);
@@ -107,8 +107,7 @@ void Probe(not_null<Main::Session*> session, PeerId peerId, not_null<PeerData*> 
 	)).done([=](const MTPDataJSON &result) {
 		ApplyFeatures(session, peerId, ParseMaxCount(result));
 	}).fail([=](const MTP::Error &error) {
-		// A server without the Crossgram API answers an unknown method with an
-		// error; remember that and stop querying it for this session.
+		// 不支持 Crossgram API 的服务端会对未知方法报错；标记当前 Session 不再重复请求
 		LOG(("Crossgram feature query failed: %1").arg(error.type()));
 		StateFor(session).unavailable = true;
 		ApplyFeatures(session, peerId, std::nullopt);
@@ -144,8 +143,7 @@ void SendPoke(
 		not_null<UserData*> target,
 		int count,
 		base::weak_ptr<Window::SessionController> controller) {
-	// The relay answers with Bool and publishes QQ's poke notice as a regular
-	// message update, so a successful send needs no extra UI.
+	// 服务端通过常规消息流下发戳一戳提示，发送成功无需额外 UI 反馈
 	session->api().request(MTPcrossgram_SendPoke(
 		conversation->input(),
 		target->inputUser(),

@@ -7,21 +7,15 @@
 
 namespace Crossgram::MergedForward {
 
-// The relay names a synthetic merged-forward chat after the multi-forward it
-// renders: `bridgebundle_<id>` in current builds and `bridgechat_<id>` in
-// older ones that are still addressable. Such a username means "history-only
-// view": the peer must stay out of the chat list, and the link has to open
-// the transcript at the message it anchors to, which the relay points at the
-// first message of the bundle. The glue in merged_forward.cpp maps the
-// QString onto these bytes, so the accepted usernames can be verified
-// without Qt.
+// 服务端用 `bridgebundle_<id>`（旧版为 `bridgechat_<id>`）标识合成的合并转发会话。
+// 这类会话仅作历史记录视图展示，不能加入左侧会话列表，且打开链接时需直接定位到首条消息。
+// 此头文件不依赖 Qt，供 merged_forward.cpp 将 QString 转为字节后调用。
 inline constexpr auto kUsernamePrefixes = {
 	std::string_view("bridgebundle_"),
 	std::string_view("bridgechat_"),
 };
 
-// Matches QString::toLongLong() as used by the glue: the id must consist of
-// ASCII digits, fit into a signed 64-bit value and be positive.
+// 与 QString::toLongLong() 校验规则一致：后缀必须为纯 ASCII 数字，且在 64 位正有符号整数范围内。
 [[nodiscard]] inline bool IsSyntheticUsername(std::string_view username) {
 	constexpr auto kMaxId = std::uint64_t(0x7FFFFFFFFFFFFFFFULL);
 	for (const auto prefix : kUsernamePrefixes) {

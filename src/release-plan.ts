@@ -91,8 +91,7 @@ export function createReleasePlan({
       continue;
     }
     const safeTag = safeReleaseTag(release.tag);
-    // A runtime-brand build is a single universal package, so it does not
-    // participate in the six-brand batching scheme below.
+    // runtime 品牌单平台只产出一个通用包，不走六品牌分批
     if (requestedBrands?.has("runtime")) {
       for (const platform of platforms) {
         if (skipPublished && !releaseArtifactNames(

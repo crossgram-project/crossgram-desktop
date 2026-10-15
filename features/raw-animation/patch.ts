@@ -10,9 +10,7 @@ interface PatchOptions {
 const sourceRoot = "Telegram/SourceFiles";
 
 /**
- * Keep Crossgram's raw GIF/APNG documents and stickers in the existing
- * FFmpeg-backed animation paths instead of requiring relay-side WebM/WebP
- * conversion.
+ * 让客户端现有的 FFmpeg 动画管线直接播放原始 GIF/APNG 文档与贴纸，无需服务端预先转码为 WebM/WebP。
  */
 export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);
@@ -230,13 +228,9 @@ export async function patchRawAnimation(options: PatchOptions): Promise<void> {
   });
 
   await context.edit(`${sourceRoot}/media/clip/media_clip_ffmpeg.cpp`, (file) => {
-    // Older Crossgram patches enabled FFmpeg's native GIF/APNG loop. With
-    // the bundled FFmpeg 6.1 decoder, some APNGs reject the first packet of
-    // the second demuxer-managed cycle with EINVAL and disappear after one
-    // pass. The clip reader already owns the loop boundary: on EOF it seeks,
-    // flushes the decoder, and resets timing. Keep the demuxer at its default
-    // single-pass behavior so that reset happens before another packet is
-    // submitted. This conditional replacement upgrades already-patched trees.
+    // 旧版补丁曾开启 FFmpeg 的 GIF/APNG 原生循环（ignore_loop=0），但内置的 FFmpeg 6.1
+    // 解码部分 APNG 时会在第二轮首包报 EINVAL 并停止显示。播放器自身在 EOF 时会 seek、
+    // 清空解码器缓冲并重置计时，因此保持解复用器默认的单次播放即可；此处兼容升级已打过旧补丁的源码树。
     if (file.has('av_dict_set(&options, "ignore_loop", "0", 0)')) {
       file.replace(
         `\tauto options = static_cast<AVDictionary*>(nullptr);

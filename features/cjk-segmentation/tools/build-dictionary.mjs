@@ -1,18 +1,14 @@
-// Builds data/words.bin, the compact word list the patched client ships.
+// 构建客户端内置的紧凑词典 data/words.bin。
 //
-// The base list is jieba's Chinese word list (see SOURCES.md); every line of
-// it holds a word, its frequency and a part of speech, and it comes from a
-// news corpus, so it is trimmed to the words that are common enough to matter
-// and completed with data/supplement.txt.
+// 基础词表来自 jieba（见 SOURCES.md，每行包含词语、词频与词性），过滤低频长尾词后
+// 与 data/supplement.txt 合并。
 //
-// Output layout (little-endian, inside a qUncompress payload):
+// 产物布局（qUncompress 解压后的小端字节序）：
 //   header: uint32 version, uint32 count, uint32 maxUnits, int16 unknownScore
-//   body:   (count + 1) uint32 word offsets, count int16 scores, words as UTF-8
+//   body:   (count + 1) 个 uint32 词偏移量, count 个 int16 分数, UTF-8 词表拼接字节
 //
-// Scores are natural logarithms of the frequency scaled by the sum of all
-// frequencies, multiplied by 1000 and rounded, so a segmentation can be
-// chosen by comparing sums of integers. Words are sorted by their UTF-8 bytes,
-// which is the same order as by code points, so a lookup is a binary search.
+// 分数为 ln(词频 / 总词频) * 1000 取整，分词时可直接通过整数累加比较路径；
+// 词条按 UTF-8 字节序（与码点序一致）升序排列，支持二分查找。
 import { readFileSync, writeFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { createHash } from "node:crypto";
@@ -25,16 +21,13 @@ if (!basePath) {
   throw new Error("Usage: node build-dictionary.mjs <path to jieba dict.txt>");
 }
 
-// A word has to appear this often in the base corpus to be worth shipping; the
-// tail of the list is names, places and other compounds that a chat message
-// rarely needs, and dropping it halves the payload.
+// 过滤基础词表中聊天场景罕见的低频专名与复合词，将词典体积减半
 const minFrequency = 8;
 
-// The weight of a character the list does not know at all, matching a word
-// that appears three times in the base corpus.
+// 未知单字默认频次（相当于在基础语料中出现 3 次）
 const unknownFrequency = 3;
 
-// The weight of a supplemental word that does not specify one.
+// 补充词表未指定频次时的默认权重
 const supplementFrequency = 3000;
 
 const version = 1;

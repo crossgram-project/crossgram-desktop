@@ -1,63 +1,13 @@
-# Message history accessibility row cache
+# 聊天历史无障碍列表缓存（`features/accessibility`）
 
-Telegram Desktop exposes every loaded message of the open chat as an
-accessibility child and rebuilds that row list on every read: `accessibleElements()`
-walks all history blocks and asks every message whether it is hidden. A screen
-reader reads several properties per row and walks every row on a focus change,
-while every one of those reads resolved its row by rebuilding the whole list
-again. A single `QWidget::setFocus` in a long history - tens of thousands of
-loaded messages - therefore cost quadratic time on the UI thread, and the client
-stopped responding with a stack through `Ui::Accessible::Widget::focusChild`,
-`Ui::Accessible::Item::state`, `Item::currentIndex`,
-`HistoryInner::accessibilityChildIdentity`, `HistoryInner::accessibleElements`
-and `Element::isHidden`.
+Telegram Desktop 将当前会话中加载的每条消息暴露为无障碍子元素（Accessibility Child），但上游 `HistoryInner::accessibleElements()` 在每次被读取时都会遍历全部历史消息块并逐条检查 `isHidden()`。当会话包含上万条消息且触发焦点切换（`QWidget::setFocus`）时，屏幕阅读器或系统无障碍组件会反复读取属性，导致 UI 线程陷入 $O(N^2)$ 卡死。
 
-This patch keeps the row list until something reports that it may have changed:
+## 补丁行为
 
-- `accessibleElements()` returns a reference to a cached `std::vector<Element*>`
-  and only rebuilds it after an invalidation, so reading a property of a row is
-  O(1) instead of O(messages). All readers inside the widget bind that reference
-  instead of copying the vector;
-- `invalidateAccessibleElements()` drops the cache. It is called from every
-  notification that can change the rows: a new item added to the shown history,
-  history unload and clear, removal of an item, destruction of any message view,
-  a change of the migrated history, and the widget's own `updateSize()` and
-  `viewLayoutChanged` notifications.
+- 在 `HistoryInner` 中缓存 `std::vector<Element*>`，使单行无障碍属性读取从 $O(N)$ 降为 $O(1)$。
+- 新增 `invalidateAccessibleElements()`，在所有会改变消息行或销毁视图的路径上清空缓存：新增/移除消息、卸载/清空历史、销毁任意 `HistoryView::Element`、切换迁移历史（Migrated History）以及 `updateSize()` / `viewLayoutChanged` 布局变更。
 
-Dropping the cache for every destroyed view is what keeps the cached raw
-`HistoryView::Element*` pointers valid, because a slice update destroys and
-recreates views. Geometry updates and view-layout notifications also cover
-loaded slices and rows becoming hidden or visible in place. `HistoryInner` and
-`HistoryView::ListWidget` are independent widgets; `ListWidget` is not a base
-class of `HistoryInner`, so adding a virtual method there cannot provide a
-`HistoryInner` override or invalidate its cache. This patch leaves `ListWidget`
-unchanged.
+## 测试
 
-The cache lives in `HistoryInner` instead of `lib_ui`'s `Ui::Accessible::Item`
-because only the widget knows when its rows changed: the library can tell that a
-row moved (through the stable identity) but not whether the rows it is asked
-about are still alive.
-
-A hidden state that changes without any of those notifications keeps the previous
-rows until the next one, which is the same laziness the surrounding accessibility
-code already has when it repairs a cached focus index on the next key press.
-
-Upstream still rebuilds the row list on every read, so this cache lives in the
-patcher. If an upstream ever caches the rows itself, the anchors below stop
-matching and the check workflow fails loudly, and this feature can be dropped.
-
-## Tests
-
-`tests/accessibility.test.ts` verifies the cache and all invalidation call sites,
-idempotence, CRLF preservation, and unchanged sibling-list sources. It also
-compiles and executes the generated cache implementation in a C++20 harness
-with the actual independent widget-base shape. This rejects invalid overrides
-and checks repeated-read reuse, geometry invalidation, migrated-row ordering,
-hidden rows, and removal of cached view pointers. Use `clang++` or set `CXX` to
-a compatible C++ compiler.
-
-`tests/accessibility.e2e.test.ts` repeats that against real release sources when
-`CROSSGRAM_DESKTOP_ACCESSIBILITY_SOURCE_ROOT` points at clean snapshots with one
-directory per target. The `check.yml` workflow applies the whole patch set to
-every supported upstream release, so a changed upstream fails the check job
-instead of silently losing the cache.
+- `tests/accessibility.test.ts`：校验补丁幂等性，并通过 C++20 编译器编译运行生成的缓存逻辑。
+- `tests/accessibility.e2e.test.ts`：针对真实上游源码执行补丁校验。

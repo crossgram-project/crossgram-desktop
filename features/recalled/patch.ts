@@ -7,13 +7,12 @@ interface PatchOptions {
   readonly featureRoot: string;
 }
 
-/** Add Crossgram recalled flags and render visible recalls on every desktop target. */
+/** 为各桌面端目标注入撤回标记字段与可见撤回消息的半透明/角标渲染。 */
 export async function patchRecalled(options: PatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);
 
-  // The wire schema and HistoryItem plumbing are shared by tdesktop, 64Gram,
-  // Materialgram and AyuGram. `true` flag fields carry no payload, so old
-  // clients safely ignore the new bits while retaining the same constructor.
+  // tdesktop、64Gram、Materialgram 与 AyuGram 共用同一套 TL schema 与 HistoryItem 字段。
+  // `true` 类型的位标记不携带额外负载，旧客户端可在保持相同构造器 ID 的前提下安全忽略新标记位。
   await context.edit("Telegram/SourceFiles/mtproto/scheme/api.tl", (file) => {
     file.replacePattern(
       /^message#7600b9d3 flags:# /m,

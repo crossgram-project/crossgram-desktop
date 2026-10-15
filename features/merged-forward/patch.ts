@@ -11,8 +11,7 @@ const sourceRoot = "Telegram/SourceFiles";
 const include = '#include "crossgram/merged_forward.h"';
 
 /**
- * Open Crossgram's synthetic basic chats without letting Telegram Desktop
- * materialize them as ordinary dialogs in the left-hand chat list.
+ * 打开 Crossgram 合成的合并转发会话时，阻止 Telegram Desktop 将其写入左侧会话列表。
  */
 export async function patchMergedForward(options: PatchOptions): Promise<void> {
   const context = new PatchContext(options.root, options.target, options.featureRoot);
