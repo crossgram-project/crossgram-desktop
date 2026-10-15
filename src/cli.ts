@@ -14,6 +14,7 @@ import { patchMergedForward } from "../features/merged-forward/patch.js";
 import { patchPoke } from "../features/poke/patch.js";
 import { patchAccessibility } from "../features/accessibility/patch.js";
 import { patchCjkSegmentation } from "../features/cjk-segmentation/patch.js";
+import { patchMentionMatching } from "../features/mention-matching/patch.js";
 import { patchUpstreamCompatibility } from "../features/upstream-compat/patch.js";
 import { patchRecalled } from "../features/recalled/patch.js";
 import { patchWinUnicodeInput } from "../features/win-unicode-input/patch.js";
@@ -135,6 +136,11 @@ if (!values.target || (command === "patch" && !values.root) || !["patch", "metad
       root: values.root!,
       target,
       featureRoot: resolve(repositoryRoot, "features/cjk-segmentation"),
+    });
+    await patchMentionMatching({
+      root: values.root!,
+      target,
+      featureRoot: resolve(repositoryRoot, "features/mention-matching"),
     });
     await patchWinUnicodeInput({
       root: values.root!,
