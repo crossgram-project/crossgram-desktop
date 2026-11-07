@@ -14,7 +14,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture(eol = "\n"): Promise<string> {
+async function fixture(eol = "\n", withBgr0 = true): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-raw-animation-"));
   roots.push(root);
   const data = path.join(root, "Telegram", "SourceFiles", "data");
@@ -182,7 +182,7 @@ FrameGenerator::Frame FrameGenerator::Impl::renderCurrent(
 \t\t? _codec->pix_fmt
 \t\t: frame->format;
 \tconst auto bgra = (srcFormat == AV_PIX_FMT_BGRA);
-\tconst auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);
+${withBgr0 ? "\tconst auto bgr0 = (srcFormat == AV_PIX_FMT_BGR0);\n" : ""}\tconst auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);
 \tif (withAlpha) {
 \t\tPremultiplyInplace(storage);
 \t}
@@ -602,6 +602,20 @@ make -j$NUMBER_OF_PROCESSORS
     expect(cpp.indexOf("const auto withAlpha = descriptor"))
       .toBeLessThan(cpp.indexOf("PremultiplyInplace(storage)"));
     expect(cpp.match(/#include <libavutil\/pixdesc\.h>/g)).toHaveLength(1);
+  });
+
+  it("premultiplies straight alpha on the pre-7.4 two-line shape", async () => {
+    const root = await fixture("\n", false);
+    await patch(root);
+    const cpp = await readFile(path.join(
+      root,
+      "Telegram/SourceFiles/ffmpeg/ffmpeg_frame_generator.cpp",
+    ), "utf8");
+    expect(cpp).toContain("straight-alpha RGB");
+    expect(cpp).toContain("descriptor->flags & AV_PIX_FMT_FLAG_ALPHA");
+    expect(cpp).not.toContain(
+      "const auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);",
+    );
   });
 
   it("does not call avformat_find_stream_info after FFmpeg rejects cached bytes", async () => {

@@ -15,7 +15,7 @@ function decodedCycle(file: string): Buffer[] {
     "-ignore_loop", "1",
     "-i", path.join(fixtures, file),
     "-frames:v", "2",
-    "-vsync", "0",
+    "-fps_mode", "passthrough",
     "-f", "rawvideo",
     "-pix_fmt", "rgba",
     "pipe:1",

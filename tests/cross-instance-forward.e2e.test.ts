@@ -13,7 +13,11 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture(eol = "\n", selectedItems = "getSelectedItems()"): Promise<string> {
+async function fixture(
+  eol = "\n",
+  selectedItems = "getSelectedItems()",
+  listIdsSource: "collectSelectedIds" | "items" = "collectSelectedIds",
+): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-drag-forward-"));
   roots.push(root);
   const source = path.join(root, "Telegram", "SourceFiles");
@@ -55,8 +59,9 @@ void second() {
 `),
     write("Telegram/SourceFiles/history/view/history_view_list_widget.cpp", `#include "history/view/history_view_list_widget.h"
 void first() {
-				session().data().setMimeForwardIds(std::move(items));
-				mimeData->setData(u"application/x-td-forward"_q, "1");
+${listIdsSource === "collectSelectedIds"
+    ? "\t\t\tsession().data().setMimeForwardIds(collectSelectedIds());\n\t\t\tmimeData->setData(u\"application/x-td-forward\"_q, \"1\");"
+    : "\t\t\t\tsession().data().setMimeForwardIds(std::move(items));\n\t\t\t\tmimeData->setData(u\"application/x-td-forward\"_q, \"1\");"}
 }
 void second() {
 	auto result = std::make_unique<QMimeData>();
@@ -127,8 +132,12 @@ bool PhotoMedia::setToClipboard() {
   return root;
 }
 
-async function patched(eol = "\n", selectedItems = "getSelectedItems()") {
-  const root = await fixture(eol, selectedItems);
+async function patched(
+  eol = "\n",
+  selectedItems = "getSelectedItems()",
+  listIdsSource: "collectSelectedIds" | "items" = "collectSelectedIds",
+) {
+  const root = await fixture(eol, selectedItems, listIdsSource);
   const options = {
     root,
     target: targetById("tdesktop"),
@@ -182,6 +191,12 @@ describe("Desktop cross-instance media drag patch", () => {
     const { history } = await patched("\n", "getSelectedForwardItems()");
     expect(history).toContain("Crossgram::DragForward::Set(");
     expect(history).not.toContain("getSelectedForwardItems()");
+  });
+
+  it("still injects into the pre-7.4 std::move(items) drag shape", async () => {
+    const { list } = await patched("\n", "getSelectedItems()", "items");
+    expect(list.match(/Crossgram::DragForward::Set\(/g)).toHaveLength(2);
+    expect(list).not.toContain("application/x-td-forward");
   });
 
   it("materializes complete multi-selections as an ordered local-file list", async () => {

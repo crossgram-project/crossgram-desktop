@@ -13,7 +13,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture(): Promise<string> {
+async function fixture(withUpstreamGuard = true): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-direct-e2e-"));
   roots.push(root);
   const source = path.join(root, "Telegram", "SourceFiles");
@@ -111,6 +111,14 @@ bool DocumentData::displayLoading() const {
 `,
     "utf8",
   );
+  const upstreamGuard = withUpstreamGuard ? `
+\tif (file.byteSize < 0 || file.byteSize > Storage::kMaxFileInMemory) {
+\t\tfile.flags |= CloudFile::Flag::Failed;
+\t\tif (const auto onstack = fail) {
+\t\t\tonstack(false);
+\t\t}
+\t\treturn;
+\t}` : "";
   await writeFile(path.join(source, "data", "data_cloud_file.cpp"), `void LoadCloudFile(
 \tCloudFile &file,
 \tFn<bool()> finalCheck,
@@ -121,7 +129,7 @@ bool DocumentData::displayLoading() const {
 \t\t|| !file.location.valid()
 \t\t|| (finalCheck && !finalCheck())) {
 \t\treturn;
-\t}
+\t}${upstreamGuard}
 \tfile.flags &= ~CloudFile::Flag::Cancelled;
 \tfile.loader = CreateFileLoader();
 }
@@ -129,7 +137,7 @@ bool DocumentData::displayLoading() const {
   return root;
 }
 
-async function patchedFixture(): Promise<{
+async function patchedFixture(withUpstreamGuard = true): Promise<{
   schema: string;
   cmake: string;
   header: string;
@@ -143,7 +151,7 @@ async function patchedFixture(): Promise<{
   documentImplementation: string;
   documentView: string;
 }> {
-  const root = await fixture();
+  const root = await fixture(withUpstreamGuard);
   const options = {
     root,
     target: targetById("tdesktop"),
@@ -251,11 +259,19 @@ describe("Desktop direct-download patch e2e", () => {
     expect(helper).toContain("fileReference.startsWith(kReactionPrefix)");
   });
 
-  it("rejects oversized filename-less cloud files before FileLoader asserts", async () => {
+  it("keeps the upstream oversized filename-less cloud file rejection in place", async () => {
     const { cloudFile } = await patchedFixture();
     expect(cloudFile).toContain("file.byteSize > Storage::kMaxFileInMemory");
     expect(cloudFile).toContain("file.flags |= CloudFile::Flag::Failed;");
     expect(cloudFile).toContain("onstack(false);");
+    expect(cloudFile.indexOf("file.byteSize > Storage::kMaxFileInMemory"))
+      .toBeLessThan(cloudFile.indexOf("file.loader = CreateFileLoader();"));
+    expect(cloudFile).not.toContain("oversized synthetic photo sizes");
+  });
+
+  it("injects the oversized cloud file guard when the upstream lacks it", async () => {
+    const { cloudFile } = await patchedFixture(false);
+    expect(cloudFile).toContain("oversized synthetic photo sizes");
     expect(cloudFile.indexOf("file.byteSize > Storage::kMaxFileInMemory"))
       .toBeLessThan(cloudFile.indexOf("file.loader = CreateFileLoader();"));
   });

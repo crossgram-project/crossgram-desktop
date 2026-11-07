@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 async function patchedFixture(
-  fixtureOptions: { directMaybeSend?: boolean; transcodeQueue?: boolean } = {},
+  fixtureOptions: { directMaybeSend?: boolean; transcodeQueue?: boolean; transcodeNoTimer?: boolean } = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), "crossgram-desktop-fast-upload-"));
   roots.push(root);
@@ -54,10 +54,18 @@ private:
 	} else if (!_nextTimer.isActive()) {
 		maybeSend();
 	}`
-    : fixtureOptions.directMaybeSend
+    : fixtureOptions.transcodeNoTimer
       ? `	_queue.push_back({ itemId, file });
+	if (preparing) {
+		_queue.back().preparing = true;
+		startTranscode(itemId);
+	} else {
+		maybeSend();
+	}`
+      : fixtureOptions.directMaybeSend
+        ? `	_queue.push_back({ itemId, file });
 	maybeSend();`
-      : `	_queue.push_back({ itemId, file });
+        : `	_queue.push_back({ itemId, file });
 	if (!_nextTimer.isActive()) {
 		maybeSend();
 	}`;
@@ -137,6 +145,14 @@ describe("Desktop hash-first upload patch e2e", () => {
     const { implementation } = await patchedFixture({ transcodeQueue: true });
     expect(implementation).toContain("if (preparing) {");
     expect(implementation).toContain("_queue.back().preparing = true;");
+    expect(implementation).toContain("startTranscode(itemId);");
+    expect(implementation).toContain("} else if (!tryFastUpload(itemId, file)) {");
+    expect(implementation.match(/_queue\.push_back\(\{ itemId, file \}\);/g)).toHaveLength(3);
+  });
+
+  it("handles materialgram's timer-less transcode queue shape", async () => {
+    const { implementation } = await patchedFixture({ transcodeNoTimer: true });
+    expect(implementation).toContain("if (preparing) {");
     expect(implementation).toContain("startTranscode(itemId);");
     expect(implementation).toContain("} else if (!tryFastUpload(itemId, file)) {");
     expect(implementation.match(/_queue\.push_back\(\{ itemId, file \}\);/g)).toHaveLength(3);

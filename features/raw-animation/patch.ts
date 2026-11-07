@@ -269,11 +269,16 @@ extern "C" {
       "#include <libavutil/pixdesc.h>",
     );
 
+    // Telegram Desktop 7.4 declares bgr0 between bgra and withAlpha; older
+    // forks carry the two-line shape.
+    const bgr0Anchor = `\tconst auto bgr0 = (srcFormat == AV_PIX_FMT_BGR0);
+`;
+    const bgr0Keep = file.has(bgr0Anchor) ? bgr0Anchor : "";
     file.replace(
       `\tconst auto bgra = (srcFormat == AV_PIX_FMT_BGRA);
-\tconst auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);`,
+${bgr0Keep}\tconst auto withAlpha = bgra || (srcFormat == AV_PIX_FMT_YUVA420P);`,
       `\tconst auto bgra = (srcFormat == AV_PIX_FMT_BGRA);
-\t// APNG commonly decodes to RGBA rather than BGRA/YUVA. Frame storage is
+${bgr0Keep}\t// APNG commonly decodes to RGBA rather than BGRA/YUVA. Frame storage is
 \t// QImage::Format_ARGB32_Premultiplied, so every alpha-bearing FFmpeg
 \t// format must be premultiplied after swscale. Otherwise straight-alpha RGB
 \t// leaks through transparent pixels as colored fringes and rectangles.

@@ -539,6 +539,9 @@ QString DocumentData::crossgramDownloadTransport() const {
   });
 
   await context.edit(`${sourceRoot}/data/data_cloud_file.cpp`, (file) => {
+    // Telegram Desktop 7.4 rejects byteSize<0 or >kMaxFileInMemory in
+    // LoadCloudFile itself; older forks (AyuGram) still need the guard.
+    if (file.text().includes("Storage::kMaxFileInMemory")) return;
     file.replace(
       `\t} else if ((file.flags & CloudFile::Flag::Failed)
 \t\t|| !file.location.valid()

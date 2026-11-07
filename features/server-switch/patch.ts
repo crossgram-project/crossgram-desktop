@@ -39,6 +39,8 @@ export async function patchServerSwitch(options: PatchOptions): Promise<void> {
   });
 
   await context.edit("Telegram/build/prepare/prepare.py", (file) => {
+    // Materialgram 7.3 dropped the Windows dump_syms msbuild step.
+    if (!file.has('    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64"')) return;
     file.replace(
       '    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64"',
       '    msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform="x64" /property:IncludePath="%INCLUDE%" /property:LibraryPath="%LIB%"',

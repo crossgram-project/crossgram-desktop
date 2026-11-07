@@ -69,7 +69,15 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
 	} else if (!_nextTimer.isActive()) {
 		maybeSend();
 	}`;
-    const replacement = file.has(queuedUploadWithTranscode)
+    // Materialgram 7.3 drops the next-timer guard around maybeSend.
+    const queuedUploadTranscodeNoTimer = `	_queue.push_back({ itemId, file });
+	if (preparing) {
+		_queue.back().preparing = true;
+		startTranscode(itemId);
+	} else {
+		maybeSend();
+	}`;
+    const replacement = (file.has(queuedUploadWithTranscode) || file.has(queuedUploadTranscodeNoTimer))
       ? `	if (preparing) {
 		_queue.push_back({ itemId, file });
 		_queue.back().preparing = true;
@@ -83,9 +91,11 @@ export async function patchFastUpload(options: PatchOptions): Promise<void> {
     file.replace(
       file.has(queuedUploadWithTranscode)
         ? queuedUploadWithTranscode
-        : file.has(queuedUploadWithTimer)
-          ? queuedUploadWithTimer
-          : queuedUploadDirectly,
+        : file.has(queuedUploadTranscodeNoTimer)
+          ? queuedUploadTranscodeNoTimer
+          : file.has(queuedUploadWithTimer)
+            ? queuedUploadWithTimer
+            : queuedUploadDirectly,
       replacement,
       "tryFastUpload(itemId, file)",
     );

@@ -58,18 +58,37 @@ export async function patchCrossInstanceForward(options: PatchOptions): Promise<
         relative === "history/view/history_view_list_widget.cpp"
         && file.text().includes("FillDragMimeWithPhoto(result.get()")
       ) {
-        file.replace(
-          `session().data().setMimeForwardIds(std::move(items));
-\t\t\t\tmimeData->setData(u"application/x-td-forward"_q, "1");`,
-          `Crossgram::DragForward::Set(
+        // Telegram Desktop 7.4 renamed the ids source and dedented the drag
+        // block; older forks keep the std::move(items) shape.
+        const modern = `session().data().setMimeForwardIds(collectSelectedIds());
+\t\t\tmimeData->setData(u"application/x-td-forward"_q, "1");`;
+        const legacy = `session().data().setMimeForwardIds(std::move(items));
+\t\t\t\tmimeData->setData(u"application/x-td-forward"_q, "1");`;
+        if (file.has(modern) || file.has("\n\t\t\t\tcollectSelectedIds());")) {
+          file.replace(
+            modern,
+            `Crossgram::DragForward::Set(
+\t\t\t\tmimeData.get(),
+\t\t\t\t&session().data(),
+\t\t\t\tcollectSelectedIds());`,
+            `Crossgram::DragForward::Set(
+\t\t\t\tmimeData.get(),
+\t\t\t\t&session().data(),
+\t\t\t\tcollectSelectedIds());`,
+          );
+        } else {
+          file.replace(
+            legacy,
+            `Crossgram::DragForward::Set(
 \t\t\t\t\tmimeData.get(),
 \t\t\t\t\t&session().data(),
 \t\t\t\t\tstd::move(items));`,
-          `Crossgram::DragForward::Set(
+            `Crossgram::DragForward::Set(
 \t\t\t\t\tmimeData.get(),
 \t\t\t\t\t&session().data(),
 \t\t\t\t\tstd::move(items));`,
-        );
+          );
+        }
       }
       file.replace(
         `session().data().setMimeForwardIds(std::move(forwardIds));
