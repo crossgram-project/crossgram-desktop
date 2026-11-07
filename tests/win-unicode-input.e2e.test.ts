@@ -39,18 +39,20 @@ const applicationSource = [
 
 interface HarnessResult {
   readonly mode: string;
+  readonly foreground: boolean;
   readonly results: readonly string[];
 }
 
 function parseHarnessOutput(stdout: string): HarnessResult {
   const mode = /^MODE=(\S+)$/m.exec(stdout)?.[1];
+  const foreground = /^FOREGROUND=(yes|no)$/m.exec(stdout)?.[1] === "yes";
   const results = Array.from(stdout.matchAll(/^RESULT(\d)=(.*)$/gm))
     .sort((left, right) => Number(left[1]) - Number(right[1]))
     .map((match) => match[2] ?? "");
   if (!mode || !stdout.includes("DONE")) {
     throw new Error(`Harness did not finish: ${stdout}`);
   }
-  return { mode, results };
+  return { mode, foreground, results };
 }
 
 async function patchedSourceRoot(): Promise<string> {
@@ -76,7 +78,7 @@ async function patchedSourceRoot(): Promise<string> {
 describe.skipIf(process.platform !== "win32" || !qtRoot)(
   "Windows injected Unicode input end to end",
   () => {
-    it("reproduces the captured duplication and keeps the characters with the patch", async () => {
+    it("types every character once, and shows why swallowing the press alone typed nothing", async (context) => {
       const sourceRoot = await patchedSourceRoot();
       const workRoot = path.resolve("../work/tests/win-unicode-input-e2e");
       const buildRoot = await mkdtemp(path.join(workRoot, "build-"));
@@ -101,16 +103,30 @@ describe.skipIf(process.platform !== "win32" || !qtRoot)(
       const control = parseHarnessOutput(
         (await run(binary, ["--control"], { env: environment, timeout: 60_000 })).stdout,
       );
+      if (!control.foreground) {
+        // Injected input only reaches the foreground window, so a session
+        // without one cannot exercise this path at all.
+        context.skip();
+      }
+      const shipped = parseHarnessOutput(
+        (await run(binary, ["--shipped"], { env: environment, timeout: 60_000 })).stdout,
+      );
       const patched = parseHarnessOutput(
         (await run(binary, [], { env: environment, timeout: 60_000 })).stdout,
       );
 
       expect(control.mode).toBe("control");
+      expect(shipped.mode).toBe("shipped");
       expect(patched.mode).toBe("patched");
       // Upstream: the packet without a key release replays ，and drops 这.
-      expect(control.results).toEqual(["，，", "😀", "ab"]);
-      // Patched: every character of the captured stream survives in order.
-      expect(patched.results).toEqual(["，这", "😀", "ab"]);
+      expect(control.results).toEqual(["这是一个消息，，是最好的消息", "😀", "测试", "ab"]);
+      // Swallowing the press without translating it leaves no character message
+      // at all: this is the regression that made voice input insert nothing.
+      expect(shipped.results).toEqual(["", "", "测试", "ab"]);
+      // Patched: every character survives once, a surrogate pair still arrives
+      // combined, and a character message with no key press in front of it
+      // (what the filter's own translation produces) is typed.
+      expect(patched.results).toEqual(["这是一个消息，这是最好的消息", "😀", "测试", "ab"]);
     }, 300_000);
   },
 );

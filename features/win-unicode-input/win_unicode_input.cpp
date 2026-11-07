@@ -18,15 +18,18 @@ namespace {
 
 constexpr auto kPacketVirtualKey = WPARAM(0xE7); // VK_PACKET
 
-// 拦截 VK_PACKET 的按下与释放事件，让随后的 WM_CHAR 走 Qt 纯字符分发路径，
-// 避免输入工具连续注入未释放的 VK_PACKET 时被 Qt 误判为自动连发而吞字。
-// 代理对原本由 Qt 在按键按下路径中合并，此处需手动拼接并提交。
+// 拦截 VK_PACKET 的按下与释放，但先自己把按下翻译一次。
+//
+// 字符不在按下消息里：TranslateMessage 才会把 WM_CHAR 投进队列，而 Qt 的事件分发器
+// 只在没有过滤器吞掉消息时才调用它。吞掉按下而不翻译，微信语音输入就一个字都打不出来。
+// 翻译出的 WM_CHAR 随后走 Qt 的纯字符路径，因此也不再有“漏发抬起导致自动连发重放上
+// 一个字符”的问题。代理对原本由 Qt 在按键按下路径中合并，此处需手动拼接并提交。
 class Filter final : public QAbstractNativeEventFilter {
 public:
 	bool nativeEventFilter(
 			const QByteArray &eventType,
 			void *message,
-			qintptr *result) override {
+			qintptr *) override {
 		if (eventType != QByteArrayLiteral("windows_generic_MSG")) {
 			return false;
 		}
@@ -55,6 +58,10 @@ public:
 			return false;
 		}
 		const auto reaction = _state.onEvent(event, value);
+		if (reaction.translate) {
+			// 分发器不会为被过滤的消息调用 TranslateMessage，这里补上
+			::TranslateMessage(msg);
+		}
 		if (reaction.commitSurrogatePair) {
 			commitSurrogatePair(reaction.high, reaction.low);
 		}

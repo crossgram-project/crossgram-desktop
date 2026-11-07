@@ -96,6 +96,13 @@ describe("Windows injected-Unicode input patch", () => {
     expect(sources.core).toContain("commitSurrogatePair");
     expect(sources.source).toContain("VK_PACKET");
     expect(sources.source).toContain("installNativeEventFilter");
+    // 过滤器吞掉按下会让 Qt 跳过 TranslateMessage，因此必须自己翻译一次；
+    // 少了这一步，注入的字符根本不会变成 WM_CHAR。
+    expect(sources.core).toContain("bool translate");
+    expect(sources.source).toContain("::TranslateMessage(msg);");
+    const filter = sources.source ?? "";
+    expect(filter.indexOf("reaction.translate"))
+      .toBeLessThan(filter.indexOf("return (reaction.action == Action::Swallow);"));
     // Non-Windows builds must still compile the shared source list entry.
     expect(sources.source).toContain("#if defined(_WIN32)");
     expect(sources.source).toContain("#else // _WIN32");
