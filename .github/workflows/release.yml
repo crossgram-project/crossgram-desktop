@@ -982,6 +982,16 @@ jobs:
             echo "No update payloads were produced; skipping the feed."
             exit 0
           fi
+          # 先把 updates 分支取到 feed/ 里再写本轮产物：反过来的话，刚写出的文件在
+          # 新建的仓库里是未跟踪文件，checkout 会以「would be overwritten」拒绝。
+          mkdir -p feed
+          git -C feed init -q .
+          git -C feed remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+          if git -C feed fetch -q --depth 1 origin updates; then
+            git -C feed checkout -q -B updates FETCH_HEAD
+          else
+            git -C feed checkout -q --orphan updates
+          fi
           python3 - <<'PY'
           import hashlib, os, pathlib, re, subprocess, tempfile
 
@@ -1026,16 +1036,12 @@ jobs:
           print(f"verified {written} payload(s)")
           PY
 
-          cd feed
-          git init -q .
-          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
-          if git fetch -q --depth 1 origin updates; then
-            git checkout -q -B updates FETCH_HEAD
-          else
-            git checkout -q --orphan updates
+          git -C feed add -A
+          if git -C feed diff --cached --quiet; then
+            echo "The update feed already points at this build."
+            exit 0
           fi
-          git add -A
-          git -c user.email=crossgram@users.noreply.github.com -c user.name=Crossgram \
+          git -C feed -c user.email=crossgram@users.noreply.github.com -c user.name=Crossgram \
             commit -q -m "updates: feed for crossgram-${RUN_NUMBER}"
-          git push -q origin HEAD:updates
+          git -C feed push -q origin HEAD:updates
           echo "Published the update feed for crossgram-${RUN_NUMBER}."
