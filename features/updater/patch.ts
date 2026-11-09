@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { PatchContext } from "../../src/core/patch-context.js";
@@ -23,6 +23,20 @@ export const CONFIG_ROOT = "Telegram/SourceFiles/config.h";
 export const LOCALSTORAGE_ROOT = "Telegram/SourceFiles/storage/localstorage.cpp";
 export const PACKER_ROOT = "Telegram/SourceFiles/_other/packer.cpp";
 export const CMAKE_ROOT = "Telegram/CMakeLists.txt";
+
+/**
+ * Telegram Desktop 7.3+ 舍弃了 config.h 里的 RSA 更新公钥，改为在构建期把
+ * Ed25519 根公钥与签名密钥清单（cmake/generate_update_keys.cmake 读取该目录）
+ * 嵌入二进制，并只接受带 TDUP 信封的 V2 更新包。
+ */
+export const UPDATE_RESOURCES_ROOT = "Telegram/Resources/update";
+
+/** 存在 UPDATE_RESOURCES_ROOT 的上游走 V2 链路，其余（AyuGram 7.2 等）仍走 RSA。 */
+export const V2_UPDATE_FILES = [
+  "root-public.pem",
+  "manifest.min.json",
+  "manifest.sig",
+] as const;
 
 export type UpdatePlatform = "windows" | "linux" | "macos";
 
@@ -174,6 +188,23 @@ async function installPackerKeys(
   }
 }
 
+/**
+ * 将 UPDATE_RESOURCES_ROOT 下嵌入客户端的上游根公钥与密钥清单替换为 Crossgram
+ * 版本，使 V2 更新包的验签锚点指向 Crossgram 根密钥。目录不存在（Telegram
+ * Desktop 7.3 之前的上游）时返回 false，保留 RSA 链路不变。
+ */
+export async function installV2UpdateKeys(root: string, featureRoot: string): Promise<boolean> {
+  try {
+    await access(join(root, UPDATE_RESOURCES_ROOT, "root-public.pem"));
+  } catch {
+    return false;
+  }
+  for (const name of V2_UPDATE_FILES) {
+    await copyFile(join(featureRoot, "assets", "v2", name), join(root, UPDATE_RESOURCES_ROOT, name));
+  }
+  return true;
+}
+
 /** 不同上游分支中 readAutoupdatePrefixRaw 的函数签名格式。 */
 export const PREFIX_SIGNATURES = [
   "const QString &readAutoupdatePrefixRaw()",
@@ -207,6 +238,7 @@ export async function patchUpdater(options: UpdaterPatchOptions): Promise<void> 
   const pem = await readFile(join(options.featureRoot, "assets", "update-public-key.pem"), "utf8");
   const key = cppKeyLiteral(pem);
   const active = options.platform !== null && options.build !== null;
+  const v2 = await installV2UpdateKeys(options.root, options.featureRoot);
 
   await context.edit(PACKER_ROOT, (file) => {
     const source = file.text();
@@ -232,13 +264,11 @@ export async function patchUpdater(options: UpdaterPatchOptions): Promise<void> 
   });
   await context.edit(CONFIG_ROOT, (file) => {
     const patches = updateKeyPatches(file.text(), key);
-    if (patches.length === 0) {
+    if (patches.length === 0 && !v2) {
       console.warn(
-        "Crossgram updater: " + CONFIG_ROOT + " no longer declares the client"
-        + " update keys, so the Crossgram feed key was not installed there."
-        + " Telegram Desktop 7.3 verifies updates against the Ed25519 root key"
-        + " and manifest embedded from Telegram/Resources/update/, which needs"
-        + " its own port before Crossgram builds can install their own updates.",
+        "Crossgram updater: neither the " + CONFIG_ROOT + " RSA keys nor the"
+        + " V2 manifest under " + UPDATE_RESOURCES_ROOT + " were found, so the"
+        + " client keeps upstream update verification.",
       );
     }
     for (const patch of patches) {

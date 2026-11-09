@@ -1,3 +1,4 @@
+import { createPublicKey, verify } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,9 +11,12 @@ import {
   CMAKE_ROOT,
   LOCALSTORAGE_ROOT,
   PACKER_ROOT,
+  UPDATE_RESOURCES_ROOT,
+  V2_UPDATE_FILES,
   VERSION_ROOT,
   crossgramVersion,
   cppKeyLiteral,
+  installV2UpdateKeys,
   packerKeyHeaderRelative,
   packerKeyPatches,
   packerTargetPatch,
@@ -99,6 +103,15 @@ const key = cppKeyLiteral(
 );
 
 describe("desktop updater patch", () => {
+  const trees: string[] = [];
+
+  afterEach(async () => {
+    while (trees.length) {
+      const tree = trees.pop();
+      if (tree) await rm(tree, { recursive: true, force: true });
+    }
+  });
+
   it("numbers Crossgram builds above every upstream AppVersion", () => {
     expect(crossgramVersion(242)).toBe(100_000_242);
     expect(() => crossgramVersion(0)).toThrow();
@@ -160,6 +173,75 @@ describe("desktop updater patch", () => {
     const replacement = prefixFunction(updatePrefix("tdesktop-x64", "qq", "linux"));
     expect(replacement).toContain('return AutoupdatePrefix("https://raw.githubusercontent.com/crossgram-project/crossgram-desktop/updates/tdesktop-x64-qq/linux");');
     expect(replacement).toContain("Expects(!Core::UpdaterDisabled());");
+  });
+
+  it("ships v2 assets whose manifest matches the root key signature", async () => {
+    const assets = join(process.cwd(), "features/updater/assets/v2");
+    const manifest = await readFile(join(assets, "manifest.min.json"));
+    const signature = await readFile(join(assets, "manifest.sig"));
+    const root = createPublicKey(await readFile(join(assets, "root-public.pem")));
+    expect(verify(null, manifest, root, signature)).toBe(true);
+    const parsed = JSON.parse(manifest.toString("utf8")) as {
+      format: number;
+      keys: { id: string }[];
+      channels: Record<string, string[][]>;
+    };
+    expect(parsed.format).toBe(1);
+    const ids = new Set(parsed.keys.map((entry) => entry.id));
+    expect(ids.size).toBeGreaterThan(0);
+    for (const groups of Object.values(parsed.channels)) {
+      for (const group of groups) {
+        for (const id of group) expect(ids.has(id)).toBe(true);
+      }
+    }
+  });
+
+  it("installs the v2 update keys only into trees carrying them", async () => {
+    const featureRoot = join(process.cwd(), "features/updater");
+    const legacy = await mkdtemp(join(tmpdir(), "crossgram-updater-legacy-"));
+    trees.push(legacy);
+    expect(await installV2UpdateKeys(legacy, featureRoot)).toBe(false);
+
+    const v2 = await mkdtemp(join(tmpdir(), "crossgram-updater-v2-"));
+    trees.push(v2);
+    await mkdir(join(v2, UPDATE_RESOURCES_ROOT), { recursive: true });
+    await writeFile(join(v2, UPDATE_RESOURCES_ROOT, "root-public.pem"), "upstream\n");
+    expect(await installV2UpdateKeys(v2, featureRoot)).toBe(true);
+    for (const name of V2_UPDATE_FILES) {
+      expect(await readFile(join(v2, UPDATE_RESOURCES_ROOT, name))).toEqual(
+        await readFile(join(featureRoot, "assets", "v2", name)),
+      );
+    }
+  });
+
+  it("swaps the embedded v2 keys even without a build number", async () => {
+    const root = await mkdtemp(join(tmpdir(), "crossgram-updater-embed-"));
+    trees.push(root);
+    for (const [relative, contents] of [
+      [VERSION_ROOT, versionHeader],
+      [CONFIG_ROOT, configHeader],
+      [PACKER_ROOT, packerSource],
+      [LOCALSTORAGE_ROOT, localstorage],
+      [CMAKE_ROOT, cmakeLists],
+    ] as const) {
+      await mkdir(join(root, relative, ".."), { recursive: true });
+      await writeFile(join(root, relative), contents, "utf8");
+    }
+    await mkdir(join(root, UPDATE_RESOURCES_ROOT), { recursive: true });
+    await writeFile(join(root, UPDATE_RESOURCES_ROOT, "root-public.pem"), "upstream\n");
+    await writeFile(join(root, UPDATE_RESOURCES_ROOT, "manifest.min.json"), "upstream\n");
+    await patchUpdater({
+      root,
+      target: targetById("tdesktop"),
+      brand: "runtime",
+      platform: null,
+      build: null,
+      featureRoot: join(process.cwd(), "features/updater"),
+      privateKey: null,
+    });
+    const swapped = await readFile(join(root, UPDATE_RESOURCES_ROOT, "manifest.min.json"), "utf8");
+    expect(swapped).not.toBe("upstream\n");
+    expect(swapped).toContain('"cg-rl-1"');
   });
 });
 

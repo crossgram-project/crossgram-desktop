@@ -169,6 +169,7 @@ jobs:
           BRAND_BATCH: ${{ matrix.build.batch }}
           RUN_NUMBER: ${{ github.run_number }}
           UPDATE_KEY: ${{ secrets.CROSSGRAM_UPDATE_KEY }}
+          UPDATE_V2_KEY: ${{ secrets.CROSSGRAM_UPDATE_V2_KEY }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -346,15 +347,28 @@ jobs:
               Remove-Item -LiteralPath $payloadWork -Recurse -Force
             }
             New-Item -ItemType Directory -Path $payloadWork | Out-Null
+            # Telegram Desktop 7.3+ 只接受 TDUP V2 更新包（Ed25519 根密钥
+            # 验签），更早的上游仍走 RSA v1 包。
+            $v2 = Test-Path -LiteralPath (Join-Path $source 'Telegram/Resources/update/manifest.min.json')
+            $v2Assets = Join-Path $patcher 'features/updater/assets/v2'
+            $packerArgs = @('-path', $payloadStage, '-version', "$crossgramVersion", '-target', 'win64')
+            if ($v2) {
+              if (-not $env:UPDATE_V2_KEY) { throw 'The CROSSGRAM_UPDATE_V2_KEY secret is required to sign v2 updates' }
+              $v2KeyFile = Join-Path $env:RUNNER_TEMP 'crossgram-update-v2-key.pem'
+              [IO.File]::WriteAllText($v2KeyFile, $env:UPDATE_V2_KEY, [Text.UTF8Encoding]::new($false))
+              $v2KeyId = (Get-Content -LiteralPath (Join-Path $v2Assets 'manifest.min.json') -Raw | ConvertFrom-Json).keys[0].id
+              $packerArgs += @('-channel', 'stable', '-keys-loc', $v2Assets, '-local-key', $v2KeyFile, '-local-key-id', $v2KeyId)
+            }
             Push-Location $payloadWork
             try {
-              & $packer -path $payloadStage -version $crossgramVersion -target win64
+              & $packer @packerArgs
               if ($LASTEXITCODE -ne 0) { throw "Packing the update failed for $brand" }
             } finally {
               Pop-Location
             }
             $payloadName = "crossgram-$env:CROSSGRAM_TARGET-$brand-windows-$crossgramVersion.upd"
-            $payloadSource = Join-Path $payloadWork "tx64upd$crossgramVersion"
+            $packedName = if ($v2) { "td-update-windows-x64-$crossgramVersion" } else { "tx64upd$crossgramVersion" }
+            $payloadSource = Join-Path $payloadWork $packedName
             if (-not (Test-Path -LiteralPath $payloadSource)) { throw "Missing $payloadSource" }
             Move-Item -LiteralPath $payloadSource -Destination ([IO.Path]::GetFullPath((Join-Path 'artifacts' $payloadName)))
           }
@@ -377,6 +391,7 @@ jobs:
           BRAND_BATCH: ${{ matrix.build.batch }}
           RUN_NUMBER: ${{ github.run_number }}
           UPDATE_KEY: ${{ secrets.CROSSGRAM_UPDATE_KEY }}
+          UPDATE_V2_KEY: ${{ secrets.CROSSGRAM_UPDATE_V2_KEY }}
           OVERRIDE_API_ID: ${{ secrets.TDESKTOP_API_ID }}
           OVERRIDE_API_HASH: ${{ secrets.TDESKTOP_API_HASH }}
         run: |
@@ -653,10 +668,30 @@ jobs:
             tar -C "$package" -cJf "$archive" .
 
             # Pack the signed update payload that the client downloads and installs.
+            # Telegram Desktop 7.3+ 只接受 TDUP V2 更新包（Ed25519 根密钥
+            # 验签），更早的上游仍走 RSA v1 包。
             crossgram_version=$((100000000 + RUN_NUMBER))
             payload_work="$GITHUB_WORKSPACE/artifacts/payload-work-$brand"
             rm -rf "$payload_work"
             mkdir -p "$payload_work"
+            packer_args=(-path "/work/artifacts/package" -version "$crossgram_version")
+            packed_name="tlinuxupd$crossgram_version"
+            if [ -f "$source/Telegram/Resources/update/manifest.min.json" ]; then
+              if [ -z "$UPDATE_V2_KEY" ]; then
+                echo "The CROSSGRAM_UPDATE_V2_KEY secret is required to sign v2 updates" >&2
+                exit 1
+              fi
+              v2_key_file="$GITHUB_WORKSPACE/.crossgram-update-v2-key.pem"
+              printf '%s' "$UPDATE_V2_KEY" > "$v2_key_file"
+              v2_id="$(jq -r '.keys[0].id' "$patcher/features/updater/assets/v2/manifest.min.json")"
+              packer_args+=(
+                -channel stable
+                -keys-loc "/work/patcher/features/updater/assets/v2"
+                -local-key "/work/.crossgram-update-v2-key.pem"
+                -local-key-id "$v2_id"
+              )
+              packed_name="td-update-linux-x64-$crossgram_version"
+            fi
             docker run --rm \
               -u "$(id -u)" \
               -w "/work/artifacts/payload-work-$brand" \
@@ -664,9 +699,9 @@ jobs:
               -v "$source:/usr/src/tdesktop" \
               crossgram-tdesktop-build \
               "/usr/src/tdesktop/out/Release/Packer" \
-              -path "/work/artifacts/package" \
-              -version "$crossgram_version"
-            payload_source="$payload_work/tlinuxupd$crossgram_version"
+              "${packer_args[@]}"
+            rm -f "$v2_key_file"
+            payload_source="$payload_work/$packed_name"
             if [ ! -f "$payload_source" ]; then
               echo "Missing $payload_source" >&2
               exit 1
@@ -1011,21 +1046,30 @@ jobs:
                   if not match:
                       raise SystemExit(f"unexpected payload name: {payload.name}")
                   blob = payload.read_bytes()
-                  if len(blob) <= 148:
+                  if blob[:4] == b"TDUP":
+                      # V2 包出厂时已由 Packer 跑过完整客户端验签，这里只做
+                      # 结构校验：信封 magic/format/version-base。
+                      if int.from_bytes(blob[4:8], "little") != 2:
+                          raise SystemExit(f"payload {payload.name} has an unknown envelope format")
+                      version = int.from_bytes(blob[11:19], "little")
+                      if version >> 32 != int(match["version"]):
+                          raise SystemExit(f"payload {payload.name} carries a mismatched version")
+                  elif len(blob) > 148:
+                      signature, digest, body = blob[:128], blob[128:148], blob[148:]
+                      if hashlib.sha1(body).digest() != digest:
+                          raise SystemExit(f"payload {payload.name} has a broken SHA1 header")
+                      signature_file = pathlib.Path(scratch) / "signature.bin"
+                      body_file = pathlib.Path(scratch) / "body.bin"
+                      signature_file.write_bytes(signature)
+                      body_file.write_bytes(body)
+                      subprocess.run(
+                          ["openssl", "dgst", "-sha1", "-verify", str(public_key),
+                           "-signature", str(signature_file), str(body_file)],
+                          check=True,
+                          stdout=subprocess.DEVNULL,
+                      )
+                  else:
                       raise SystemExit(f"payload {payload.name} is too small to carry a header")
-                  signature, digest, body = blob[:128], blob[128:148], blob[148:]
-                  if hashlib.sha1(body).digest() != digest:
-                      raise SystemExit(f"payload {payload.name} has a broken SHA1 header")
-                  signature_file = pathlib.Path(scratch) / "signature.bin"
-                  body_file = pathlib.Path(scratch) / "body.bin"
-                  signature_file.write_bytes(signature)
-                  body_file.write_bytes(body)
-                  subprocess.run(
-                      ["openssl", "dgst", "-sha1", "-verify", str(public_key),
-                       "-signature", str(signature_file), str(body_file)],
-                      check=True,
-                      stdout=subprocess.DEVNULL,
-                  )
                   url = (f"https://github.com/{repository}/releases/download/{tag}/{payload.name}")
                   directory = pathlib.Path("feed") / (match["target"] + "-" + match["brand"]) / match["platform"]
                   directory.mkdir(parents=True, exist_ok=True)
