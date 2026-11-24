@@ -179,6 +179,8 @@ jobs:
           $brands = @($env:BRANDS | ConvertFrom-Json)
           $brandingPaths = @(
             'Telegram/SourceFiles/core/version.h',
+            'Telegram/SourceFiles/_other/updater_win.cpp',
+            'Telegram/SourceFiles/_other/updater_linux.cpp',
             'Telegram/CMakeLists.txt',
             'Telegram/Telegram.plist',
             'Telegram/Resources/winrc',
@@ -341,7 +343,15 @@ jobs:
               Remove-Item -LiteralPath $payloadStage -Recurse -Force
             }
             New-Item -ItemType Directory -Path $payloadStage | Out-Null
-            foreach ($file in $files) { Copy-Item -LiteralPath $file -Destination $payloadStage }
+            # Packer 用首个 -path 的父目录（QFileInfo::canonicalPath）作为剥离前缀：
+            # 传目录会把目录名本身打进更新包路径，导致 Updater 解包到子目录而无法覆盖主程序，
+            # 因此必须与上游 build.bat 一致逐个文件传入 -path。
+            $packerArgs = @()
+            foreach ($file in $files) {
+              $staged = Join-Path $payloadStage ([IO.Path]::GetFileName($file))
+              Copy-Item -LiteralPath $file -Destination $staged
+              $packerArgs += @('-path', $staged)
+            }
             $payloadWork = Join-Path $env:RUNNER_TEMP "crossgram-payload-work-$brand"
             if (Test-Path -LiteralPath $payloadWork) {
               Remove-Item -LiteralPath $payloadWork -Recurse -Force
@@ -351,7 +361,7 @@ jobs:
             # 验签），更早的上游仍走 RSA v1 包。
             $v2 = Test-Path -LiteralPath (Join-Path $source 'Telegram/Resources/update/manifest.min.json')
             $v2Assets = Join-Path $patcher 'features/updater/assets/v2'
-            $packerArgs = @('-path', $payloadStage, '-version', "$crossgramVersion", '-target', 'win64')
+            $packerArgs += @('-version', "$crossgramVersion", '-target', 'win64')
             if ($v2) {
               if (-not $env:UPDATE_V2_KEY) { throw 'The CROSSGRAM_UPDATE_V2_KEY secret is required to sign v2 updates' }
               $v2KeyFile = Join-Path $env:RUNNER_TEMP 'crossgram-update-v2-key.pem'
@@ -401,6 +411,8 @@ jobs:
           while IFS= read -r brand; do brands+=("$brand"); done < <(jq -r '.[]' <<<"$BRANDS")
           branding_paths=(
             Telegram/SourceFiles/core/version.h
+            Telegram/SourceFiles/_other/updater_win.cpp
+            Telegram/SourceFiles/_other/updater_linux.cpp
             Telegram/CMakeLists.txt
             Telegram/Telegram.plist
             Telegram/Resources/winrc
@@ -670,11 +682,16 @@ jobs:
             # Pack the signed update payload that the client downloads and installs.
             # Telegram Desktop 7.3+ 只接受 TDUP V2 更新包（Ed25519 根密钥
             # 验签），更早的上游仍走 RSA v1 包。
+            # 与上游 build.sh 一致逐文件传 -path，避免把 package/ 目录前缀打进更新包。
             crossgram_version=$((100000000 + RUN_NUMBER))
             payload_work="$GITHUB_WORKSPACE/artifacts/payload-work-$brand"
             rm -rf "$payload_work"
             mkdir -p "$payload_work"
-            packer_args=(-path "/work/artifacts/package" -version "$crossgram_version")
+            packer_args=(-path "/work/artifacts/package/$product")
+            if [ -f "$package/Updater" ]; then
+              packer_args+=(-path "/work/artifacts/package/Updater")
+            fi
+            packer_args+=(-version "$crossgram_version")
             packed_name="tlinuxupd$crossgram_version"
             if [ -f "$source/Telegram/Resources/update/manifest.min.json" ]; then
               if [ -z "$UPDATE_V2_KEY" ]; then
@@ -735,6 +752,8 @@ jobs:
           while IFS= read -r brand; do brands+=("$brand"); done < <(jq -r '.[]' <<<"$BRANDS")
           branding_paths=(
             Telegram/SourceFiles/core/version.h
+            Telegram/SourceFiles/_other/updater_win.cpp
+            Telegram/SourceFiles/_other/updater_linux.cpp
             Telegram/CMakeLists.txt
             Telegram/Telegram.plist
             Telegram/Resources/winrc
@@ -1028,7 +1047,7 @@ jobs:
             git -C feed checkout -q --orphan updates
           fi
           python3 - <<'PY'
-          import hashlib, os, pathlib, re, subprocess, tempfile
+          import hashlib, lzma, os, pathlib, re, struct, subprocess, tempfile
 
           repository = os.environ["GH_REPO"]
           run = os.environ["RUN_NUMBER"]
@@ -1040,6 +1059,45 @@ jobs:
           )
           versions = ["current", "current2", "current3", "current6"]
           written = 0
+
+          def list_v1_entries(body: bytes, platform: str) -> list[str]:
+              if platform == "windows":
+                  props = body[:5]
+                  orig_size = struct.unpack_from("<i", body, 5)[0]
+                  raw = lzma.LZMADecompressor(
+                      format=lzma.FORMAT_RAW,
+                      filters=[lzma._decode_filter_properties(lzma.FILTER_LZMA1, props)],
+                  ).decompress(body[9:], max_length=orig_size)
+              else:
+                  orig_size = struct.unpack_from("<i", body, 0)[0]
+                  raw = lzma.decompress(body[4:])
+              if len(raw) != orig_size:
+                  raise SystemExit(f"decompressed size mismatch: {len(raw)} != {orig_size}")
+              offset = 0
+              (ver,) = struct.unpack_from(">I", raw, offset)
+              offset += 4
+              if ver == 0x7FFFFFFF:
+                  offset += 8
+              (count,) = struct.unpack_from(">I", raw, offset)
+              offset += 4
+              entries = []
+              for _ in range(count):
+                  (name_len,) = struct.unpack_from(">I", raw, offset)
+                  offset += 4
+                  name = raw[offset:offset + name_len].decode("utf-16-be")
+                  offset += name_len
+                  (file_size,) = struct.unpack_from(">I", raw, offset)
+                  offset += 4
+                  (ba_len,) = struct.unpack_from(">I", raw, offset)
+                  offset += 4
+                  if ba_len != file_size:
+                      raise SystemExit(f"corrupt QByteArray length for {name}")
+                  offset += ba_len
+                  if platform != "windows":
+                      offset += 1
+                  entries.append(name)
+              return entries
+
           with tempfile.TemporaryDirectory() as scratch:
               for payload in sorted(pathlib.Path("artifacts").glob("*.upd")):
                   match = pattern.match(payload.name)
@@ -1068,6 +1126,11 @@ jobs:
                           check=True,
                           stdout=subprocess.DEVNULL,
                       )
+                      entries = list_v1_entries(body, match["platform"])
+                      if not entries or any("/" in e or "\\" in e for e in entries):
+                          raise SystemExit(
+                              f"payload {payload.name} has nested or empty entries: {entries}"
+                          )
                   else:
                       raise SystemExit(f"payload {payload.name} is too small to carry a header")
                   url = (f"https://github.com/{repository}/releases/download/{tag}/{payload.name}")

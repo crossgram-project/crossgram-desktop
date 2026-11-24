@@ -26,6 +26,12 @@ import {
   updatePrefix,
   versionPatch,
 } from "../features/updater/patch.js";
+import {
+  UPDATER_LINUX_ROOT,
+  UPDATER_WIN_ROOT,
+  patchUpdaterExecutableNames,
+} from "../features/branding/patch.js";
+import { PatchContext } from "../src/core/patch-context.js";
 import { targetById } from "../src/targets.js";
 
 const configHeader = [
@@ -415,5 +421,85 @@ describe("packer private key headers", () => {
       }
       expect(header).toContain(cppKeyLiteral(privateKey).slice(0, 20));
     }
+  });
+});
+
+describe("release workflow update packing", () => {
+  it("passes individual files (never staging directories) to Packer on Windows and Linux", async () => {
+    const workflow = await readFile(".github/workflows/release.yml", "utf8");
+    // Passing a directory to Packer strips its parent path and prefixes every
+    // packed entry with the directory name, so Updater extracts into a subfolder
+    // instead of replacing the executable.
+    expect(workflow).not.toContain("'-path', $payloadStage");
+    expect(workflow).not.toContain('-path "/work/artifacts/package"');
+    expect(workflow).toContain("$packerArgs += @('-path', $staged)");
+    expect(workflow).toContain('packer_args=(-path "/work/artifacts/package/$product")');
+    expect(workflow).toContain('packer_args+=(-path "/work/artifacts/package/Updater")');
+    expect(workflow).toContain("def list_v1_entries(");
+    expect(workflow).toContain('any("/" in e or "\\\\" in e for e in entries)');
+  });
+});
+
+describe("updater executable name branding", () => {
+  const trees: string[] = [];
+
+  afterEach(async () => {
+    while (trees.length) {
+      const tree = trees.pop();
+      if (tree) await rm(tree, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces upstream executable names in updater_win.cpp and updater_linux.cpp idempotently", async () => {
+    const root = await mkdtemp(join(tmpdir(), "crossgram-updater-exe-"));
+    trees.push(root);
+    await mkdir(join(root, "Telegram/SourceFiles/_other"), { recursive: true });
+    await writeFile(
+      join(root, UPDATER_WIN_ROOT),
+      [
+        '} else if (equal(tofname, updateTo + L"AyuGram.exe") && exeName != L"AyuGram.exe") {',
+        '\texeName = L"AyuGram.exe";',
+        'if (exeName.empty()) {',
+        '\texeName = L"AyuGram.exe";',
+        '}',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      join(root, UPDATER_LINUX_ROOT),
+      [
+        '} else if (equal(tofname, exePath + "Telegram") && exeName != "Telegram") {',
+        'if (exeName.empty() || exeName.find(\'/\') != string::npos) {',
+        '\texeName = "Telegram";',
+        '}',
+        'writeLog("Executed Telegram, closing log and quitting..");',
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const context = new PatchContext(root, targetById("ayugram"), join(process.cwd(), "features/branding"));
+    await patchUpdaterExecutableNames(context, "CrossAyuGram");
+
+    const win = await readFile(join(root, UPDATER_WIN_ROOT), "utf8");
+    expect(win).toContain('equal(tofname, updateTo + L"CrossAyuGram.exe") && exeName != L"CrossAyuGram.exe"');
+    expect(win).toContain('exeName = L"CrossAyuGram.exe";');
+    expect(win).not.toContain('L"AyuGram.exe"');
+
+    const linux = await readFile(join(root, UPDATER_LINUX_ROOT), "utf8");
+    expect(linux).toContain('equal(tofname, exePath + "CrossAyuGram") && exeName != "CrossAyuGram"');
+    expect(linux).toContain('exeName = "CrossAyuGram";');
+    expect(linux).toContain('writeLog("Executed Telegram, closing log and quitting..");');
+
+    // Idempotent rerun
+    await patchUpdaterExecutableNames(context, "CrossAyuGram");
+    expect(await readFile(join(root, UPDATER_WIN_ROOT), "utf8")).toBe(win);
+    expect(await readFile(join(root, UPDATER_LINUX_ROOT), "utf8")).toBe(linux);
+
+    // Re-targeting to another brand updates again cleanly
+    await patchUpdaterExecutableNames(context, "QQ-Cross");
+    expect(await readFile(join(root, UPDATER_WIN_ROOT), "utf8")).toContain('L"QQ-Cross.exe"');
+    expect(await readFile(join(root, UPDATER_LINUX_ROOT), "utf8")).toContain('"QQ-Cross"');
   });
 });

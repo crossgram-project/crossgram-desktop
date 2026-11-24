@@ -1,4 +1,4 @@
-import { readdir, writeFile } from "node:fs/promises";
+import { access, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import pngToIco from "png-to-ico";
 import sharp from "sharp";
@@ -138,6 +138,51 @@ export async function patchBranding(options: PatchOptions): Promise<void> {
   });
 
   await replaceApplicationIcons(options as PatchOptions & { readonly brand: ResolvedBrand });
+  await patchUpdaterExecutableNames(context, brand.executable);
+}
+
+export const UPDATER_WIN_ROOT = "Telegram/SourceFiles/_other/updater_win.cpp";
+export const UPDATER_LINUX_ROOT = "Telegram/SourceFiles/_other/updater_linux.cpp";
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 同步更新器内硬编码的主程序文件名，确保用户重命名主程序或直接启动 Updater 时仍能原地覆盖。 */
+export async function patchUpdaterExecutableNames(
+  context: PatchContext,
+  executable: string,
+): Promise<void> {
+  if (await fileExists(join(context.root, UPDATER_WIN_ROOT))) {
+    await context.edit(UPDATER_WIN_ROOT, (file) => {
+      const match = /equal\(tofname,\s*updateTo\s*\+\s*L"([^"]+\.exe)"\)/.exec(file.text());
+      if (!match?.[1]) return;
+      const upstream = match[1];
+      const desired = `${executable}.exe`;
+      if (upstream === desired) return;
+      file.replaceEvery(`L"${upstream}"`, `L"${desired}"`);
+    });
+  }
+  if (await fileExists(join(context.root, UPDATER_LINUX_ROOT))) {
+    await context.edit(UPDATER_LINUX_ROOT, (file) => {
+      const match = /equal\(tofname,\s*exePath\s*\+\s*"([^"]+)"\)/.exec(file.text());
+      if (!match?.[1]) return;
+      const upstream = match[1];
+      if (upstream === executable) return;
+      file.replace(
+        `equal(tofname, exePath + "${upstream}") && exeName != "${upstream}"`,
+        `equal(tofname, exePath + "${executable}") && exeName != "${executable}"`,
+      );
+      if (file.text().includes(`exeName = "${upstream}";`)) {
+        file.replaceEvery(`exeName = "${upstream}";`, `exeName = "${executable}";`);
+      }
+    });
+  }
 }
 
 /**
